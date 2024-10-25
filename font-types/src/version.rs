@@ -8,9 +8,10 @@
 /// [spec]: https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-version-numbers
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern))]
 #[repr(transparent)]
 pub struct Version16Dot16(u32);
+
+crate::bytemuck::impl_bytemuck!(AnyBitPattern for Version16Dot16);
 
 /// A type representing a major, minor version pair.
 ///
@@ -22,7 +23,6 @@ pub struct Version16Dot16(u32);
 /// [spec]: https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-version-numbers
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern))]
 #[repr(C)]
 pub struct MajorMinor {
     /// The major version number
@@ -30,6 +30,8 @@ pub struct MajorMinor {
     /// The minor version number
     pub minor: u16,
 }
+
+crate::bytemuck::impl_bytemuck!(AnyBitPattern for MajorMinor);
 
 /// A trait for determining whether versions are compatible.
 pub trait Compatible<Rhs = Self>: Sized {

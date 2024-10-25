@@ -29,6 +29,8 @@ mod tag;
 mod uint24;
 mod version;
 
+pub(crate) mod bytemuck;
+
 #[cfg(all(test, feature = "serde"))]
 mod serde_test;
 

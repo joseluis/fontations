@@ -7,10 +7,13 @@ macro_rules! fixed_impl {
     ($name:ident, $bits:literal, $fract_bits:literal, $ty:ty) => {
         #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern, bytemuck::NoUninit))]
         #[repr(transparent)]
         #[doc = concat!(stringify!($bits), "-bit signed fixed point number with ", stringify!($fract_bits), " bits of fraction." )]
         pub struct $name($ty);
+
+        crate::bytemuck::impl_bytemuck!(AnyBitPattern for $name);
+        crate::bytemuck::impl_bytemuck!(NoUninit for $name);
+
         impl $name {
             /// Minimum value.
             pub const MIN: Self = Self(<$ty>::MIN);

@@ -1,9 +1,10 @@
 /// 24-bit unsigned integer.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern))]
 #[repr(transparent)]
 pub struct Uint24(u32);
+
+crate::bytemuck::impl_bytemuck!(AnyBitPattern for Uint24);
 
 impl Uint24 {
     /// The smallest value that can be represented by this integer type.

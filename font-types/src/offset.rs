@@ -5,9 +5,10 @@ use crate::{Scalar, Uint24};
 /// An offset of a given width for which NULL (zero) is a valid value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern))]
 #[repr(transparent)]
 pub struct Nullable<T>(T);
+
+crate::bytemuck::impl_bytemuck!(AnyBitPattern for Nullable<T>);
 
 // internal implementation detail; lets us implement Default for nullable offsets.
 trait NullValue {
@@ -65,9 +66,10 @@ macro_rules! impl_offset {
         /// the `None` case.
         #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern))]
         #[repr(transparent)]
         pub struct $name($rawty);
+
+        crate::bytemuck::impl_bytemuck!(AnyBitPattern for $name);
 
         impl $name {
             /// Create a new offset.

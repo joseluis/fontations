@@ -5,9 +5,10 @@
 /// This represented as a number of seconds since 12:00 midnight, January 1, 1904, UTC.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern))]
 #[repr(transparent)]
 pub struct LongDateTime(i64);
+
+crate::bytemuck::impl_bytemuck!(AnyBitPattern for LongDateTime);
 
 impl LongDateTime {
     /// Create with a number of seconds relative to 1904-01-01 00:00.

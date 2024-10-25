@@ -6,9 +6,10 @@
 /// A 16-bit glyph identifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern))]
 #[repr(transparent)]
 pub struct GlyphId16(u16);
+
+crate::bytemuck::impl_bytemuck!(AnyBitPattern for GlyphId16);
 
 impl GlyphId16 {
     /// The identifier reserved for unknown glyphs
@@ -63,9 +64,10 @@ crate::newtype_scalar!(GlyphId16, [u8; 2]);
 /// A 32-bit glyph identifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::AnyBitPattern))]
 #[repr(transparent)]
 pub struct GlyphId(u32);
+
+crate::bytemuck::impl_bytemuck!(AnyBitPattern for GlyphId);
 
 impl GlyphId {
     /// The identifier reserved for unknown glyphs.
