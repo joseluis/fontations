@@ -322,21 +322,30 @@ pub struct SbixMarker {
 }
 
 impl SbixMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + HeaderFlags::RAW_BYTE_LEN
     }
-    fn num_strikes_byte_range(&self) -> Range<usize> {
+
+    pub fn num_strikes_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn strike_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn strike_offsets_byte_range(&self) -> Range<usize> {
         let start = self.num_strikes_byte_range().end;
         start..start + self.strike_offsets_byte_len
+    }
+}
+
+impl MinByteRange for SbixMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.strike_offsets_byte_range().end
     }
 }
 
@@ -381,6 +390,7 @@ impl<'a> Sbix<'a> {
 /// The [sbix (Standard Bitmap Graphics)](https://docs.microsoft.com/en-us/typography/opentype/spec/sbix) table
 pub type Sbix<'a> = TableRef<'a, SbixMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Sbix<'a> {
     /// Table version number — set to 1.
     pub fn version(&self) -> u16 {
@@ -452,6 +462,7 @@ impl<'a> SomeTable<'a> for Sbix<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Sbix<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -466,17 +477,25 @@ pub struct StrikeMarker {
 }
 
 impl StrikeMarker {
-    fn ppem_byte_range(&self) -> Range<usize> {
+    pub fn ppem_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn ppi_byte_range(&self) -> Range<usize> {
+
+    pub fn ppi_byte_range(&self) -> Range<usize> {
         let start = self.ppem_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn glyph_data_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_data_offsets_byte_range(&self) -> Range<usize> {
         let start = self.ppi_byte_range().end;
         start..start + self.glyph_data_offsets_byte_len
+    }
+}
+
+impl MinByteRange for StrikeMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.glyph_data_offsets_byte_range().end
     }
 }
 
@@ -514,6 +533,7 @@ impl<'a> Strike<'a> {
 /// [Strike](https://learn.microsoft.com/en-us/typography/opentype/spec/sbix#strikes) header table
 pub type Strike<'a> = TableRef<'a, StrikeMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Strike<'a> {
     /// The PPEM size for which this strike was designed.
     pub fn ppem(&self) -> u16 {
@@ -550,6 +570,7 @@ impl<'a> SomeTable<'a> for Strike<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Strike<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -564,21 +585,30 @@ pub struct GlyphDataMarker {
 }
 
 impl GlyphDataMarker {
-    fn origin_offset_x_byte_range(&self) -> Range<usize> {
+    pub fn origin_offset_x_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn origin_offset_y_byte_range(&self) -> Range<usize> {
+
+    pub fn origin_offset_y_byte_range(&self) -> Range<usize> {
         let start = self.origin_offset_x_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn graphic_type_byte_range(&self) -> Range<usize> {
+
+    pub fn graphic_type_byte_range(&self) -> Range<usize> {
         let start = self.origin_offset_y_byte_range().end;
         start..start + Tag::RAW_BYTE_LEN
     }
-    fn data_byte_range(&self) -> Range<usize> {
+
+    pub fn data_byte_range(&self) -> Range<usize> {
         let start = self.graphic_type_byte_range().end;
         start..start + self.data_byte_len
+    }
+}
+
+impl MinByteRange for GlyphDataMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.data_byte_range().end
     }
 }
 
@@ -597,6 +627,7 @@ impl<'a> FontRead<'a> for GlyphData<'a> {
 /// [Glyph data](https://learn.microsoft.com/en-us/typography/opentype/spec/sbix#glyph-data) table
 pub type GlyphData<'a> = TableRef<'a, GlyphDataMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> GlyphData<'a> {
     /// The horizontal (x-axis) position of the left edge of the bitmap graphic in relation to the glyph design space origin.
     pub fn origin_offset_x(&self) -> i16 {
@@ -640,6 +671,7 @@ impl<'a> SomeTable<'a> for GlyphData<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for GlyphData<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

@@ -1,6 +1,6 @@
 //! a trait for things that can serve font tables
 
-use types::Tag;
+use types::{BigEndian, Tag};
 
 use crate::{tables, FontData, FontRead, ReadError};
 
@@ -43,7 +43,7 @@ pub trait TableProvider<'a> {
     fn hmtx(&self) -> Result<tables::hmtx::Hmtx<'a>, ReadError> {
         //FIXME: should we make the user pass these in?
         let num_glyphs = self.maxp().map(|maxp| maxp.num_glyphs())?;
-        let number_of_h_metrics = self.hhea().map(|hhea| hhea.number_of_long_metrics())?;
+        let number_of_h_metrics = self.hhea().map(|hhea| hhea.number_of_h_metrics())?;
         let data = self.expect_data_for_tag(tables::hmtx::Hmtx::TAG)?;
         tables::hmtx::Hmtx::read(data, number_of_h_metrics, num_glyphs)
     }
@@ -118,6 +118,13 @@ pub trait TableProvider<'a> {
 
     fn gvar(&self) -> Result<tables::gvar::Gvar<'a>, ReadError> {
         self.expect_table()
+    }
+
+    /// Returns the array of entries for the control value table which is used
+    /// for TrueType hinting.
+    fn cvt(&self) -> Result<&'a [BigEndian<i16>], ReadError> {
+        let table_data = self.expect_data_for_tag(Tag::new(b"cvt "))?;
+        table_data.read_array(0..table_data.len())
     }
 
     fn cvar(&self) -> Result<tables::cvar::Cvar<'a>, ReadError> {
@@ -203,14 +210,24 @@ pub trait TableProvider<'a> {
         self.expect_table()
     }
 
+    #[cfg(feature = "ift")]
     fn ift(&self) -> Result<tables::ift::Ift<'a>, ReadError> {
         self.expect_data_for_tag(tables::ift::IFT_TAG)
             .and_then(FontRead::read)
     }
 
+    #[cfg(feature = "ift")]
     fn iftx(&self) -> Result<tables::ift::Ift<'a>, ReadError> {
         self.expect_data_for_tag(tables::ift::IFTX_TAG)
             .and_then(FontRead::read)
+    }
+
+    fn meta(&self) -> Result<tables::meta::Meta<'a>, ReadError> {
+        self.expect_table()
+    }
+
+    fn base(&self) -> Result<tables::base::Base<'a>, ReadError> {
+        self.expect_table()
     }
 }
 
@@ -256,7 +273,7 @@ mod tests {
             }
         }
 
-        let number_of_h_metrics = DummyProvider.hhea().unwrap().number_of_long_metrics();
+        let number_of_h_metrics = DummyProvider.hhea().unwrap().number_of_h_metrics();
         let num_glyphs = DummyProvider.maxp().unwrap().num_glyphs();
         let hmtx = DummyProvider.hmtx().unwrap();
 

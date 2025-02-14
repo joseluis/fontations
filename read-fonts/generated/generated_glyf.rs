@@ -27,6 +27,7 @@ impl<'a> FontRead<'a> for Glyf<'a> {
 /// The [glyf (Glyph Data)](https://docs.microsoft.com/en-us/typography/opentype/spec/glyf) table
 pub type Glyf<'a> = TableRef<'a, GlyfMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Glyf<'a> {}
 
 #[cfg(feature = "experimental_traverse")]
@@ -45,6 +46,7 @@ impl<'a> SomeTable<'a> for Glyf<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Glyf<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -61,41 +63,55 @@ pub struct SimpleGlyphMarker {
 }
 
 impl SimpleGlyphMarker {
-    fn number_of_contours_byte_range(&self) -> Range<usize> {
+    pub fn number_of_contours_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn x_min_byte_range(&self) -> Range<usize> {
+
+    pub fn x_min_byte_range(&self) -> Range<usize> {
         let start = self.number_of_contours_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn y_min_byte_range(&self) -> Range<usize> {
+
+    pub fn y_min_byte_range(&self) -> Range<usize> {
         let start = self.x_min_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn x_max_byte_range(&self) -> Range<usize> {
+
+    pub fn x_max_byte_range(&self) -> Range<usize> {
         let start = self.y_min_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn y_max_byte_range(&self) -> Range<usize> {
+
+    pub fn y_max_byte_range(&self) -> Range<usize> {
         let start = self.x_max_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn end_pts_of_contours_byte_range(&self) -> Range<usize> {
+
+    pub fn end_pts_of_contours_byte_range(&self) -> Range<usize> {
         let start = self.y_max_byte_range().end;
         start..start + self.end_pts_of_contours_byte_len
     }
-    fn instruction_length_byte_range(&self) -> Range<usize> {
+
+    pub fn instruction_length_byte_range(&self) -> Range<usize> {
         let start = self.end_pts_of_contours_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn instructions_byte_range(&self) -> Range<usize> {
+
+    pub fn instructions_byte_range(&self) -> Range<usize> {
         let start = self.instruction_length_byte_range().end;
         start..start + self.instructions_byte_len
     }
-    fn glyph_data_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_data_byte_range(&self) -> Range<usize> {
         let start = self.instructions_byte_range().end;
         start..start + self.glyph_data_byte_len
+    }
+}
+
+impl MinByteRange for SimpleGlyphMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.glyph_data_byte_range().end
     }
 }
 
@@ -129,6 +145,7 @@ impl<'a> FontRead<'a> for SimpleGlyph<'a> {
 /// The [Glyph Header](https://docs.microsoft.com/en-us/typography/opentype/spec/glyf#glyph-headers)
 pub type SimpleGlyph<'a> = TableRef<'a, SimpleGlyphMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SimpleGlyph<'a> {
     /// If the number of contours is greater than or equal to zero,
     /// this is a simple glyph. If negative, this is a composite glyph
@@ -215,6 +232,7 @@ impl<'a> SomeTable<'a> for SimpleGlyph<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SimpleGlyph<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -627,29 +645,40 @@ pub struct CompositeGlyphMarker {
 }
 
 impl CompositeGlyphMarker {
-    fn number_of_contours_byte_range(&self) -> Range<usize> {
+    pub fn number_of_contours_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn x_min_byte_range(&self) -> Range<usize> {
+
+    pub fn x_min_byte_range(&self) -> Range<usize> {
         let start = self.number_of_contours_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn y_min_byte_range(&self) -> Range<usize> {
+
+    pub fn y_min_byte_range(&self) -> Range<usize> {
         let start = self.x_min_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn x_max_byte_range(&self) -> Range<usize> {
+
+    pub fn x_max_byte_range(&self) -> Range<usize> {
         let start = self.y_min_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn y_max_byte_range(&self) -> Range<usize> {
+
+    pub fn y_max_byte_range(&self) -> Range<usize> {
         let start = self.x_max_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn component_data_byte_range(&self) -> Range<usize> {
+
+    pub fn component_data_byte_range(&self) -> Range<usize> {
         let start = self.y_max_byte_range().end;
         start..start + self.component_data_byte_len
+    }
+}
+
+impl MinByteRange for CompositeGlyphMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.component_data_byte_range().end
     }
 }
 
@@ -673,6 +702,7 @@ impl<'a> FontRead<'a> for CompositeGlyph<'a> {
 /// [CompositeGlyph](https://docs.microsoft.com/en-us/typography/opentype/spec/glyf#glyph-headers)
 pub type CompositeGlyph<'a> = TableRef<'a, CompositeGlyphMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> CompositeGlyph<'a> {
     /// If the number of contours is greater than or equal to zero,
     /// this is a simple glyph. If negative, this is a composite glyph
@@ -733,6 +763,7 @@ impl<'a> SomeTable<'a> for CompositeGlyph<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for CompositeGlyph<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -752,8 +783,7 @@ impl CompositeGlyphFlags {
     /// int16); otherwise, they are bytes (uint8 or int8).
     pub const ARG_1_AND_2_ARE_WORDS: Self = Self { bits: 0x0001 };
 
-    /// Bit 1: If this is set, the arguments are signed xy values;
-
+    /// Bit 1: If this is set, the arguments are signed xy values,
     /// otherwise, they are unsigned point numbers.
     pub const ARGS_ARE_XY_VALUES: Self = Self { bits: 0x0002 };
 
@@ -1190,6 +1220,15 @@ impl<'a> FontRead<'a> for Glyph<'a> {
     }
 }
 
+impl MinByteRange for Glyph<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Simple(item) => item.min_byte_range(),
+            Self::Composite(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> Glyph<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -1201,7 +1240,7 @@ impl<'a> Glyph<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for Glyph<'a> {
+impl std::fmt::Debug for Glyph<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }

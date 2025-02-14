@@ -10,15 +10,14 @@ use crate::codegen_prelude::*;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Name {
     /// The name records where count is the number of records.
-    pub name_record: BTreeSet<NameRecord>,
+    pub name_record: Vec<NameRecord>,
     /// The language-tag records where langTagCount is the number of records.
     pub lang_tag_record: Option<Vec<LangTagRecord>>,
 }
 
 impl Name {
     /// Construct a new `Name`
-    #[allow(clippy::useless_conversion)]
-    pub fn new(name_record: BTreeSet<NameRecord>) -> Self {
+    pub fn new(name_record: Vec<NameRecord>) -> Self {
         Self {
             name_record: name_record.into_iter().map(Into::into).collect(),
             ..Default::default()
@@ -31,14 +30,14 @@ impl FontWrite for Name {
     fn write_into(&self, writer: &mut TableWriter) {
         let version = self.compute_version() as u16;
         version.write_into(writer);
-        (array_len(&self.name_record).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.name_record)).unwrap()).write_into(writer);
         (self.compute_storage_offset() as u16).write_into(writer);
         writer.adjust_offsets(self.compute_storage_offset() as u32, |writer| {
             self.name_record.write_into(writer);
         });
         version
             .compatible(1u16)
-            .then(|| (array_len(&self.lang_tag_record).unwrap() as u16).write_into(writer));
+            .then(|| (u16::try_from(array_len(&self.lang_tag_record)).unwrap()).write_into(writer));
         writer.adjust_offsets(self.compute_storage_offset() as u32, |writer| {
             version.compatible(1u16).then(|| {
                 self.lang_tag_record
@@ -61,7 +60,7 @@ impl Validate for Name {
                 if self.name_record.len() > (u16::MAX as usize) {
                     ctx.report("array exceeds max length");
                 }
-                self.name_record.validate_impl(ctx);
+                self.check_sorted_and_unique_name_records(ctx);
             });
             ctx.in_field("lang_tag_record", |ctx| {
                 if version.compatible(1u16) && self.lang_tag_record.is_none() {
@@ -92,6 +91,7 @@ impl<'a> FromObjRef<read_fonts::tables::name::Name<'a>> for Name {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::name::Name<'a>> for Name {}
 
 impl<'a> FontRead<'a> for Name {

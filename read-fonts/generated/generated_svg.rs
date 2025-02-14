@@ -11,17 +11,25 @@ use crate::codegen_prelude::*;
 pub struct SvgMarker {}
 
 impl SvgMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn svg_document_list_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn svg_document_list_offset_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn _reserved_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved_byte_range(&self) -> Range<usize> {
         let start = self.svg_document_list_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for SvgMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self._reserved_byte_range().end
     }
 }
 
@@ -43,6 +51,7 @@ impl<'a> FontRead<'a> for Svg<'a> {
 /// The [SVG](https://learn.microsoft.com/en-us/typography/opentype/spec/svg) table
 pub type Svg<'a> = TableRef<'a, SvgMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Svg<'a> {
     /// Table version (starting at 0). Set to 0.
     pub fn version(&self) -> u16 {
@@ -82,6 +91,7 @@ impl<'a> SomeTable<'a> for Svg<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Svg<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -96,13 +106,20 @@ pub struct SVGDocumentListMarker {
 }
 
 impl SVGDocumentListMarker {
-    fn num_entries_byte_range(&self) -> Range<usize> {
+    pub fn num_entries_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn document_records_byte_range(&self) -> Range<usize> {
+
+    pub fn document_records_byte_range(&self) -> Range<usize> {
         let start = self.num_entries_byte_range().end;
         start..start + self.document_records_byte_len
+    }
+}
+
+impl MinByteRange for SVGDocumentListMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.document_records_byte_range().end
     }
 }
 
@@ -123,6 +140,7 @@ impl<'a> FontRead<'a> for SVGDocumentList<'a> {
 /// [SVGDocumentList](https://learn.microsoft.com/en-us/typography/opentype/spec/svg)
 pub type SVGDocumentList<'a> = TableRef<'a, SVGDocumentListMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SVGDocumentList<'a> {
     /// Number of SVGDocumentRecords. Must be non-zero.
     pub fn num_entries(&self) -> u16 {
@@ -159,6 +177,7 @@ impl<'a> SomeTable<'a> for SVGDocumentList<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SVGDocumentList<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

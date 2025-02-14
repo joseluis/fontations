@@ -1,5 +1,6 @@
 //! test data shared between various fontations crates.
 
+pub mod bebuffer;
 pub mod cmap;
 pub mod gdef;
 pub mod gpos;
@@ -89,6 +90,8 @@ pub static AVAR2_CHECKER: &[u8] = include_bytes!("../test_data/ttf/avar2checker.
 
 pub static MATERIAL_ICONS_SUBSET: &[u8] =
     include_bytes!("../test_data/ttf/material_icons_subset.ttf");
+
+pub static TINOS_SUBSET: &[u8] = include_bytes!("../test_data/ttf/tinos_subset.ttf");
 
 pub mod varc {
     pub static CJK_6868: &[u8] = include_bytes!("../test_data/ttf/varc-6868.ttf");
@@ -235,4 +238,26 @@ pub mod colrv1_json {
 
 pub mod ttc {
     pub static TTC: &[u8] = include_bytes!("../test_data/ttc/TTC.ttc");
+}
+
+pub mod meta {
+    // the table from the binary for 'Sankofa'
+    #[rustfmt::skip]
+    pub static SIMPLE_META_TABLE: &[u8] = &[
+        0x00, 0x00, 0x00, 0x01, // version 1
+        0x00, 0x00, 0x00, 0x00, // flags 0
+        0x00, 0x00, 0x00, 0x28, // reserved (?)
+        0x00, 0x00, 0x00, 0x02, // data_maps_count 2
+        0x64, 0x6c, 0x6e, 0x67, // tag: dlng
+        0x00, 0x00, 0x00, 0x28, // data offset
+        0x00, 0x00, 0x00, 0x0d, // data length
+        0x73, 0x6c, 0x6e, 0x67, // tag: slng
+        0x00, 0x00, 0x00, 0x35, // data offset
+        0x00, 0x00, 0x00, 0x04, // length
+        0x65, 0x6e, 0x2d, 0x6c,
+        0x61, 0x74, 0x6e, 0x2c,
+        0x20, 0x6c, 0x61, 0x74,
+        0x6e, 0x6c, 0x61, 0x74,
+        0x6e, 0x00, 0x00, 0x00,
+    ];
 }

@@ -57,28 +57,68 @@ impl<'a> GlyphVariationDataHeader<'a> {
 }
 
 impl<'a> Gvar<'a> {
-    pub fn data_for_gid(&self, gid: GlyphId) -> Result<FontData<'a>, ReadError> {
+    /// Return the raw data for this gid.
+    ///
+    /// If there is no variation data for the glyph, returns `Ok(None)`.
+    pub fn data_for_gid(&self, gid: GlyphId) -> Result<Option<FontData<'a>>, ReadError> {
+        let range = self.data_range_for_gid(gid)?;
+        if range.is_empty() {
+            return Ok(None);
+        }
+        match self.data.slice(range) {
+            Some(data) => Ok(Some(data)),
+            None => Err(ReadError::OutOfBounds),
+        }
+    }
+
+    pub fn glyph_variation_data_for_range(
+        &self,
+        offset_range: Range<usize>,
+    ) -> Result<FontData<'a>, ReadError> {
+        let base = self.glyph_variation_data_array_offset() as usize;
+        let start = base
+            .checked_add(offset_range.start)
+            .ok_or(ReadError::OutOfBounds)?;
+        let end = base
+            .checked_add(offset_range.end)
+            .ok_or(ReadError::OutOfBounds)?;
+        self.data.slice(start..end).ok_or(ReadError::OutOfBounds)
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.data.as_bytes()
+    }
+
+    fn data_range_for_gid(&self, gid: GlyphId) -> Result<Range<usize>, ReadError> {
         let start_idx = gid.to_u32() as usize;
         let end_idx = start_idx + 1;
         let data_start = self.glyph_variation_data_array_offset();
-        let start = data_start + self.glyph_variation_data_offsets().get(start_idx)?.get();
-        let end = data_start + self.glyph_variation_data_offsets().get(end_idx)?.get();
-
-        self.data
-            .slice(start as usize..end as usize)
-            .ok_or(ReadError::OutOfBounds)
+        let start =
+            data_start.checked_add(self.glyph_variation_data_offsets().get(start_idx)?.get());
+        let end = data_start.checked_add(self.glyph_variation_data_offsets().get(end_idx)?.get());
+        let (Some(start), Some(end)) = (start, end) else {
+            return Err(ReadError::OutOfBounds);
+        };
+        Ok(start as usize..end as usize)
     }
 
     /// Get the variation data for a specific glyph.
-    pub fn glyph_variation_data(&self, gid: GlyphId) -> Result<GlyphVariationData<'a>, ReadError> {
+    ///
+    /// Returns `Ok(None)` if there is no variation data for this glyph, and
+    /// returns an error if there is data but it is malformed.
+    pub fn glyph_variation_data(
+        &self,
+        gid: GlyphId,
+    ) -> Result<Option<GlyphVariationData<'a>>, ReadError> {
         let shared_tuples = self.shared_tuples()?;
         let axis_count = self.axis_count();
         let data = self.data_for_gid(gid)?;
-        GlyphVariationData::new(data, axis_count, shared_tuples)
+        data.map(|data| GlyphVariationData::new(data, axis_count, shared_tuples))
+            .transpose()
     }
 
     /// Returns the phantom point deltas for the given variation coordinates
-    /// and glyph identifier.
+    /// and glyph identifier, if variation data exists for the glyph.
     ///
     /// The resulting array will contain four deltas:
     /// `[left, right, top, bottom]`.
@@ -88,7 +128,7 @@ impl<'a> Gvar<'a> {
         loca: &Loca,
         coords: &[F2Dot14],
         glyph_id: GlyphId,
-    ) -> Result<[Fixed; 4], ReadError> {
+    ) -> Result<Option<[Point<Fixed>; 4]>, ReadError> {
         // For any given glyph, there's only one outline that contributes to
         // metrics deltas (via "phantom points"). For simple glyphs, that is
         // the glyph itself. For composite glyphs, it is the first component
@@ -100,20 +140,22 @@ impl<'a> Gvar<'a> {
         // count), so that we know where the deltas for phantom points start
         // in the variation data.
         let (glyph_id, point_count) = find_glyph_and_point_count(glyf, loca, glyph_id, 0)?;
-        let mut phantom_deltas = [Fixed::ZERO; 4];
+        let mut phantom_deltas = [Point::default(); 4];
         let phantom_range = point_count..point_count + 4;
-        let var_data = self.glyph_variation_data(glyph_id)?;
+        let Some(var_data) = self.glyph_variation_data(glyph_id)? else {
+            return Ok(None);
+        };
         // Note that phantom points can never belong to a contour so we don't have
         // to handle the IUP case here.
         for (tuple, scalar) in var_data.active_tuples_at(coords) {
             for tuple_delta in tuple.deltas() {
                 let ix = tuple_delta.position as usize;
                 if phantom_range.contains(&ix) {
-                    phantom_deltas[ix - phantom_range.start] += tuple_delta.apply_scalar(scalar).x;
+                    phantom_deltas[ix - phantom_range.start] += tuple_delta.apply_scalar(scalar);
                 }
             }
         }
-        Ok(phantom_deltas)
+        Ok(Some(phantom_deltas))
     }
 }
 
@@ -243,6 +285,8 @@ fn find_glyph_and_point_count(
 
 #[cfg(test)]
 mod tests {
+    use font_test_data::bebuffer::BeBuffer;
+
     use super::*;
     use crate::{FontRef, TableProvider};
 
@@ -371,7 +415,7 @@ mod tests {
             .unwrap()
             .gvar()
             .unwrap();
-        let a_glyph_var = gvar.glyph_variation_data(GlyphId::new(1)).unwrap();
+        let a_glyph_var = gvar.glyph_variation_data(GlyphId::new(1)).unwrap().unwrap();
         assert_eq!(a_glyph_var.axis_count, 1);
         let mut tuples = a_glyph_var.tuples();
         let tup1 = tuples.next().unwrap();
@@ -380,7 +424,9 @@ mod tests {
         let x_vals = &[
             -90, -134, 4, -6, -81, 18, -25, -33, -109, -121, -111, -111, -22, -22, 0, -113, 0, 0,
         ];
-        let y_vals = &[83, 0, 0, 0, 0, 0, 83, 0, 0, 0, -50, 54, 54, -50, 0, 0, 0, 0];
+        let y_vals = &[
+            83, 0, 0, 0, 0, 0, 83, 0, 0, 0, -50, 54, 54, -50, 0, 0, -21, 0,
+        ];
         assert_eq!(tup1.deltas().map(|d| d.x_delta).collect::<Vec<_>>(), x_vals);
         assert_eq!(tup1.deltas().map(|d| d.y_delta).collect::<Vec<_>>(), y_vals);
         let tup2 = tuples.next().unwrap();
@@ -389,7 +435,7 @@ mod tests {
             20, 147, -33, -53, 59, -90, 37, -6, 109, 90, -79, -79, -8, -8, 0, 59, 0, 0,
         ];
         let y_vals = &[
-            -177, 0, 0, 0, 0, 0, -177, 0, 0, 0, 4, -109, -109, 4, 0, 0, 0, 0,
+            -177, 0, 0, 0, 0, 0, -177, 0, 0, 0, 4, -109, -109, 4, 0, 0, 9, 0,
         ];
 
         assert_eq!(tup2.deltas().map(|d| d.x_delta).collect::<Vec<_>>(), x_vals);
@@ -403,7 +449,7 @@ mod tests {
             .unwrap()
             .gvar()
             .unwrap();
-        let agrave_glyph_var = gvar.glyph_variation_data(GlyphId::new(2)).unwrap();
+        let agrave_glyph_var = gvar.glyph_variation_data(GlyphId::new(2)).unwrap().unwrap();
         let mut tuples = agrave_glyph_var.tuples();
         let tup1 = tuples.next().unwrap();
         assert_eq!(
@@ -427,7 +473,7 @@ mod tests {
             .unwrap()
             .gvar()
             .unwrap();
-        let grave_glyph_var = gvar.glyph_variation_data(GlyphId::new(3)).unwrap();
+        let grave_glyph_var = gvar.glyph_variation_data(GlyphId::new(3)).unwrap().unwrap();
         let mut tuples = grave_glyph_var.tuples();
         let tup1 = tuples.next().unwrap();
         let tup2 = tuples.next().unwrap();
@@ -445,11 +491,11 @@ mod tests {
         #[rustfmt::skip]
         let a_cases = [
             // (coords, deltas)
-            (&[0.0], [0.0; 4]),
-            (&[1.0], [0.0, 59.0, 0.0, 0.0]),
-            (&[-1.0], [0.0, -113.0, 0.0, 0.0]),
-            (&[0.5], [0.0, 29.5, 0.0, 0.0]),
-            (&[-0.5], [0.0, -56.5, 0.0, 0.0]),
+            (&[0.0], [(0.0, 0.0); 4]),
+            (&[1.0], [(0.0, 0.0), (59.0, 0.0), (0.0, 9.0), (0.0, 0.0)]),
+            (&[-1.0], [(0.0, 0.0), (-113.0, 0.0), (0.0, -21.0), (0.0, 0.0)]),
+            (&[0.5], [(0.0, 0.0), (29.5, 0.0), (0.0, 4.5), (0.0, 0.0)]),
+            (&[-0.5], [(0.0, 0.0), (-56.5, 0.0), (0.0, -10.5), (0.0, 0.0)]),
         ];
         for (coords, deltas) in a_cases {
             // This is simple glyph "A"
@@ -467,11 +513,11 @@ mod tests {
         #[rustfmt::skip]
         let grave_cases = [
             // (coords, deltas)
-            (&[0.0], [0.0; 4]),
-            (&[1.0], [0.0, 63.0, 0.0, 0.0]),
-            (&[-1.0], [0.0, -96.0, 0.0, 0.0]),
-            (&[0.5], [0.0, 31.5, 0.0, 0.0]),
-            (&[-0.5], [0.0, -48.0, 0.0, 0.0]),
+            (&[0.0], [(0.0, 0.0); 4]),
+            (&[1.0], [(0.0, 0.0), (63.0, 0.0), (0.0, 0.0), (0.0, 0.0)]),
+            (&[-1.0], [(0.0, 0.0), (-96.0, 0.0), (0.0, 0.0), (0.0, 0.0)]),
+            (&[0.5], [(0.0, 0.0), (31.5, 0.0), (0.0, 0.0), (0.0, 0.0)]),
+            (&[-0.5], [(0.0, 0.0), (-48.0, 0.0), (0.0, 0.0), (0.0, 0.0)]),
         ];
         // This is simple glyph "grave"
         for (coords, deltas) in grave_cases {
@@ -482,7 +528,11 @@ mod tests {
         }
     }
 
-    fn compute_phantom_deltas(font: &FontRef, coords: &[f32], glyph_id: GlyphId) -> [f32; 4] {
+    fn compute_phantom_deltas(
+        font: &FontRef,
+        coords: &[f32],
+        glyph_id: GlyphId,
+    ) -> [(f32, f32); 4] {
         let loca = font.loca(None).unwrap();
         let glyf = font.glyf().unwrap();
         let gvar = font.gvar().unwrap();
@@ -492,6 +542,34 @@ mod tests {
             .collect::<Vec<_>>();
         gvar.phantom_point_deltas(&glyf, &loca, &coords, glyph_id)
             .unwrap()
-            .map(|delta| delta.to_f32())
+            .unwrap()
+            .map(|delta| delta.map(Fixed::to_f32))
+            .map(|p| (p.x, p.y))
+    }
+
+    // fuzzer: add with overflow when computing glyph data range
+    // ref: <https://g-issues.oss-fuzz.com/issues/385918147>
+    #[test]
+    fn avoid_data_range_overflow() {
+        // Construct a gvar table with data offsets that overflow
+        // a u32
+        let mut buf = BeBuffer::new();
+        // major/minor version
+        buf = buf.push(1u16).push(0u16);
+        // axis count
+        buf = buf.push(0u16);
+        // shared tuple count and offset
+        buf = buf.push(0u16).push(0u32);
+        // glyph count = 1
+        buf = buf.push(1u16);
+        // flags, bit 1 = 32 bit offsets
+        buf = buf.push(1u16);
+        // variation data offset
+        buf = buf.push(u32::MAX - 10);
+        // two 32-bit entries that overflow when added to the above offset
+        buf = buf.push(0u32).push(11u32);
+        let gvar = Gvar::read(buf.data().into()).unwrap();
+        // don't panic with overflow!
+        let _ = gvar.data_range_for_gid(GlyphId::new(0));
     }
 }

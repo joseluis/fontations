@@ -96,7 +96,7 @@
 //!     caret_slope_rise: 1,
 //!     caret_slope_run: 0,
 //!     caret_offset: 0,
-//!     number_of_long_metrics: 301,
+//!     number_of_h_metrics: 301,
 //! };
 //!
 //! let _bytes = write_fonts::dump_table(&my_table).expect("failed to write bytes");
@@ -183,11 +183,11 @@ pub(crate) mod codegen_prelude {
     };
 
     /// checked conversion to u16
-    pub fn array_len<T: super::collections::HasLen>(s: &T) -> Result<u16, TryFromIntError> {
-        s.checked_len()
+    pub fn array_len<T: super::collections::HasLen>(s: &T) -> usize {
+        s.len()
     }
 
-    pub fn plus_one(val: &usize) -> Result<u16, TryFromIntError> {
-        val.saturating_add(1).try_into()
+    pub fn plus_one(val: &usize) -> usize {
+        val.saturating_add(1)
     }
 }

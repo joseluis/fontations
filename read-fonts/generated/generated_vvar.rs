@@ -11,29 +11,40 @@ use crate::codegen_prelude::*;
 pub struct VvarMarker {}
 
 impl VvarMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn item_variation_store_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn item_variation_store_offset_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn advance_height_mapping_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn advance_height_mapping_offset_byte_range(&self) -> Range<usize> {
         let start = self.item_variation_store_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn tsb_mapping_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn tsb_mapping_offset_byte_range(&self) -> Range<usize> {
         let start = self.advance_height_mapping_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn bsb_mapping_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn bsb_mapping_offset_byte_range(&self) -> Range<usize> {
         let start = self.tsb_mapping_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn v_org_mapping_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn v_org_mapping_offset_byte_range(&self) -> Range<usize> {
         let start = self.bsb_mapping_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for VvarMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.v_org_mapping_offset_byte_range().end
     }
 }
 
@@ -58,6 +69,7 @@ impl<'a> FontRead<'a> for Vvar<'a> {
 /// The [VVAR (Vertical Metrics Variations)](https://docs.microsoft.com/en-us/typography/opentype/spec/vvar) table
 pub type Vvar<'a> = TableRef<'a, VvarMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Vvar<'a> {
     /// Major version number of the horizontal metrics variations table — set to 1.
     /// Minor version number of the horizontal metrics variations table — set to 0.
@@ -167,6 +179,7 @@ impl<'a> SomeTable<'a> for Vvar<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Vvar<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

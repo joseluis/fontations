@@ -11,13 +11,20 @@ use crate::codegen_prelude::*;
 pub struct EbdtMarker {}
 
 impl EbdtMarker {
-    fn major_version_byte_range(&self) -> Range<usize> {
+    pub fn major_version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn minor_version_byte_range(&self) -> Range<usize> {
+
+    pub fn minor_version_byte_range(&self) -> Range<usize> {
         let start = self.major_version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for EbdtMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.minor_version_byte_range().end
     }
 }
 
@@ -38,6 +45,7 @@ impl<'a> FontRead<'a> for Ebdt<'a> {
 /// The [Embedded Bitmap Data](https://learn.microsoft.com/en-us/typography/opentype/spec/ebdt) table
 pub type Ebdt<'a> = TableRef<'a, EbdtMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Ebdt<'a> {
     /// Major version of the EBDT table, = 2.
     pub fn major_version(&self) -> u16 {
@@ -67,6 +75,7 @@ impl<'a> SomeTable<'a> for Ebdt<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Ebdt<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

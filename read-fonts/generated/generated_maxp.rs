@@ -25,65 +25,85 @@ pub struct MaxpMarker {
 }
 
 impl MaxpMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + Version16Dot16::RAW_BYTE_LEN
     }
-    fn num_glyphs_byte_range(&self) -> Range<usize> {
+
+    pub fn num_glyphs_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn max_points_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_points_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_points_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_contours_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_contours_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_contours_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_composite_points_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_composite_points_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_composite_points_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_composite_contours_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_composite_contours_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_composite_contours_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_zones_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_zones_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_zones_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_twilight_points_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_twilight_points_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_twilight_points_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_storage_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_storage_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_storage_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_function_defs_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_function_defs_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_function_defs_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_instruction_defs_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_instruction_defs_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_instruction_defs_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_stack_elements_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_stack_elements_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_stack_elements_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_size_of_instructions_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_size_of_instructions_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_size_of_instructions_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_component_elements_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_component_elements_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_component_elements_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn max_component_depth_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn max_component_depth_byte_range(&self) -> Option<Range<usize>> {
         let start = self.max_component_depth_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for MaxpMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.num_glyphs_byte_range().end
     }
 }
 
@@ -209,6 +229,7 @@ impl<'a> FontRead<'a> for Maxp<'a> {
 /// [`maxp`](https://docs.microsoft.com/en-us/typography/opentype/spec/maxp)
 pub type Maxp<'a> = TableRef<'a, MaxpMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Maxp<'a> {
     /// The version: 0x00005000 for version 0.5, 0x00010000 for version 1.0.
     pub fn version(&self) -> Version16Dot16 {
@@ -369,6 +390,7 @@ impl<'a> SomeTable<'a> for Maxp<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Maxp<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

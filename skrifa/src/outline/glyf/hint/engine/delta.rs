@@ -7,7 +7,7 @@
 use super::{super::graphics::CoordAxis, Engine, F26Dot6, OpResult};
 use read_fonts::tables::glyf::bytecode::Opcode;
 
-impl<'a> Engine<'a> {
+impl Engine<'_> {
     /// Delta exception P1, P2 and P3.
     ///
     /// DELTAP1[] (0x5D)
@@ -30,7 +30,12 @@ impl<'a> Engine<'a> {
     pub(super) fn op_deltap(&mut self, opcode: Opcode) -> OpResult {
         let gs = &mut self.graphics;
         let ppem = gs.ppem as u32;
-        let n = self.value_stack.pop_usize()?;
+        let point_count = gs.zp0().points.len();
+        let n = self.value_stack.pop_count_checked()?;
+        // Each exception requires two values on the stack so limit our
+        // count to prevent looping in non-pedantic mode (where the stack ops
+        // will produce 0 instead of an underflow error)
+        let n = n.min(self.value_stack.len() / 2);
         let bias = match opcode {
             Opcode::DELTAP2 => 16,
             Opcode::DELTAP3 => 32,
@@ -44,7 +49,7 @@ impl<'a> Engine<'a> {
             // FreeType notes that some popular fonts contain invalid DELTAP
             // instructions so out of bounds points are ignored.
             // See <https://gitlab.freedesktop.org/freetype/freetype/-/blob/57617782464411201ce7bbc93b086c1b4d7d84a5/src/truetype/ttinterp.c#L6537>
-            if point_ix >= gs.zp0().points.len() {
+            if point_ix >= point_count {
                 continue;
             }
             let mut c = (b as u32 & 0xF0) >> 4;
@@ -93,7 +98,11 @@ impl<'a> Engine<'a> {
     pub(super) fn op_deltac(&mut self, opcode: Opcode) -> OpResult {
         let gs = &mut self.graphics;
         let ppem = gs.ppem as u32;
-        let n = self.value_stack.pop_usize()?;
+        let n = self.value_stack.pop_count_checked()?;
+        // Each exception requires two values on the stack so limit our
+        // count to prevent looping in non-pedantic mode (where the stack ops
+        // will produce 0 instead of an underflow error)
+        let n = n.min(self.value_stack.len() / 2);
         let bias = match opcode {
             Opcode::DELTAC2 => 16,
             Opcode::DELTAC3 => 32,
@@ -121,7 +130,7 @@ impl<'a> Engine<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{super::zone::ZonePointer, MockEngine};
+    use super::super::{super::zone::ZonePointer, HintErrorKind, MockEngine};
     use raw::{
         tables::glyf::bytecode::Opcode,
         types::{F26Dot6, Point},
@@ -191,5 +200,59 @@ mod tests {
             let value = engine.cvt.get(cvt_ix).unwrap();
             assert_eq!(value.to_bits(), -8);
         }
+    }
+
+    /// Fuzzer detected timeout when the count supplied for deltap was
+    /// negative. Converting to unsigned resulted in an absurdly high
+    /// number leading to timeout.
+    /// See <https://issues.oss-fuzz.com/issues/42538387>
+    /// and <https://github.com/googlefonts/fontations/issues/1290>
+    #[test]
+    fn deltap_negative_count() {
+        let mut mock = MockEngine::new();
+        let mut engine = mock.engine();
+        // We don't care about the parameters to the instruction except
+        // for the count which is set to -1
+        let stack = [0, 0, -1];
+        // Non-pedantic mode: we end up with a count of 0 so do nothing
+        for value in &stack {
+            engine.value_stack.push(*value).unwrap();
+        }
+        // This just shouldn't hang the tests
+        engine.op_deltap(Opcode::DELTAP3).unwrap();
+        // Pedantic mode: raise an error
+        engine.value_stack.is_pedantic = true;
+        for value in &stack {
+            engine.value_stack.push(*value).unwrap();
+        }
+        assert!(matches!(
+            engine.op_deltap(Opcode::DELTAP3),
+            Err(HintErrorKind::InvalidStackValue(-1))
+        ));
+    }
+
+    /// Copy of the above test for DELTAC
+    #[test]
+    fn deltac_negative_count() {
+        let mut mock = MockEngine::new();
+        let mut engine = mock.engine();
+        // We don't care about the parameters to the instruction except
+        // for the count which is set to -1
+        let stack = [0, 0, -1];
+        // Non-pedantic mode: we end up with a count of 0 so do nothing
+        for value in &stack {
+            engine.value_stack.push(*value).unwrap();
+        }
+        // This just shouldn't hang the tests
+        engine.op_deltac(Opcode::DELTAC3).unwrap();
+        // Pedantic mode: raise an error
+        engine.value_stack.is_pedantic = true;
+        for value in &stack {
+            engine.value_stack.push(*value).unwrap();
+        }
+        assert!(matches!(
+            engine.op_deltac(Opcode::DELTAC3),
+            Err(HintErrorKind::InvalidStackValue(-1))
+        ));
     }
 }

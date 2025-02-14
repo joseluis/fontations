@@ -64,6 +64,7 @@ impl<'a> FromObjRef<read_fonts::tables::variations::TupleVariationHeader<'a>>
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::variations::TupleVariationHeader<'a>>
     for TupleVariationHeader
 {
@@ -179,6 +180,7 @@ impl<'a> FromObjRef<read_fonts::tables::variations::DeltaSetIndexMapFormat0<'a>>
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::variations::DeltaSetIndexMapFormat0<'a>>
     for DeltaSetIndexMapFormat0
 {
@@ -248,6 +250,7 @@ impl<'a> FromObjRef<read_fonts::tables::variations::DeltaSetIndexMapFormat1<'a>>
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::variations::DeltaSetIndexMapFormat1<'a>>
     for DeltaSetIndexMapFormat1
 {
@@ -380,7 +383,7 @@ impl FontWrite for VariationRegionList {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         self.axis_count.write_into(writer);
-        (array_len(&self.variation_regions).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.variation_regions)).unwrap()).write_into(writer);
         self.variation_regions.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -420,6 +423,7 @@ impl<'a> FromObjRef<read_fonts::tables::variations::VariationRegionList<'a>>
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::variations::VariationRegionList<'a>>
     for VariationRegionList
 {
@@ -564,7 +568,7 @@ impl FontWrite for ItemVariationStore {
     fn write_into(&self, writer: &mut TableWriter) {
         (1 as u16).write_into(writer);
         self.variation_region_list.write_into(writer);
-        (array_len(&self.item_variation_data).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.item_variation_data)).unwrap()).write_into(writer);
         self.item_variation_data.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -600,6 +604,7 @@ impl<'a> FromObjRef<read_fonts::tables::variations::ItemVariationStore<'a>> for 
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::variations::ItemVariationStore<'a>>
     for ItemVariationStore
 {
@@ -649,7 +654,7 @@ impl FontWrite for ItemVariationData {
     fn write_into(&self, writer: &mut TableWriter) {
         self.item_count.write_into(writer);
         self.word_delta_count.write_into(writer);
-        (array_len(&self.region_indexes).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.region_indexes)).unwrap()).write_into(writer);
         self.region_indexes.write_into(writer);
         self.delta_sets.write_into(writer);
     }
@@ -685,6 +690,7 @@ impl<'a> FromObjRef<read_fonts::tables::variations::ItemVariationData<'a>> for I
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::variations::ItemVariationData<'a>> for ItemVariationData {}
 
 impl<'a> FontRead<'a> for ItemVariationData {

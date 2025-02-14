@@ -10,11 +10,11 @@ use crate::codegen_prelude::*;
 #[repr(C)]
 #[repr(packed)]
 pub struct BitmapSize {
-    /// Offset to index subtable from beginning of EBLC/CBLC.
-    pub index_subtable_array_offset: BigEndian<u32>,
-    /// Number of bytes in corresponding index subtables and array.
-    pub index_tables_size: BigEndian<u32>,
-    /// There is an index subtable for each range or format change.
+    /// Offset to IndexSubtableList, from beginning of EBLC/CBLC.
+    pub index_subtable_list_offset: BigEndian<u32>,
+    /// Total size in bytes of the IndexSubtableList including its array of IndexSubtables.
+    pub index_subtable_list_size: BigEndian<u32>,
+    /// Number of IndexSubtables in the IndexSubtableList.
     pub number_of_index_subtables: BigEndian<u32>,
     /// Not used; set to 0.
     pub color_ref: BigEndian<u32>,
@@ -38,17 +38,17 @@ pub struct BitmapSize {
 }
 
 impl BitmapSize {
-    /// Offset to index subtable from beginning of EBLC/CBLC.
-    pub fn index_subtable_array_offset(&self) -> u32 {
-        self.index_subtable_array_offset.get()
+    /// Offset to IndexSubtableList, from beginning of EBLC/CBLC.
+    pub fn index_subtable_list_offset(&self) -> u32 {
+        self.index_subtable_list_offset.get()
     }
 
-    /// Number of bytes in corresponding index subtables and array.
-    pub fn index_tables_size(&self) -> u32 {
-        self.index_tables_size.get()
+    /// Total size in bytes of the IndexSubtableList including its array of IndexSubtables.
+    pub fn index_subtable_list_size(&self) -> u32 {
+        self.index_subtable_list_size.get()
     }
 
-    /// There is an index subtable for each range or format change.
+    /// Number of IndexSubtables in the IndexSubtableList.
     pub fn number_of_index_subtables(&self) -> u32 {
         self.number_of_index_subtables.get()
     }
@@ -122,10 +122,13 @@ impl<'a> SomeRecord<'a> for BitmapSize {
             name: "BitmapSize",
             get_field: Box::new(move |idx, _data| match idx {
                 0usize => Some(Field::new(
-                    "index_subtable_array_offset",
-                    self.index_subtable_array_offset(),
+                    "index_subtable_list_offset",
+                    self.index_subtable_list_offset(),
                 )),
-                1usize => Some(Field::new("index_tables_size", self.index_tables_size())),
+                1usize => Some(Field::new(
+                    "index_subtable_list_size",
+                    self.index_subtable_list_size(),
+                )),
                 2usize => Some(Field::new(
                     "number_of_index_subtables",
                     self.number_of_index_subtables(),
@@ -736,71 +739,81 @@ impl<'a> SomeRecord<'a> for SmallGlyphMetrics {
     }
 }
 
-/// [IndexSubtableArray](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtablearray) table.
+/// [IndexSubtableList](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtablelist) table.
 #[derive(Debug, Clone, Copy)]
 #[doc(hidden)]
-pub struct IndexSubtableArrayMarker {}
+pub struct IndexSubtableListMarker {
+    index_subtable_records_byte_len: usize,
+}
 
-impl IndexSubtableArrayMarker {
-    fn first_glyph_index_byte_range(&self) -> Range<usize> {
+impl IndexSubtableListMarker {
+    pub fn index_subtable_records_byte_range(&self) -> Range<usize> {
         let start = 0;
-        start..start + GlyphId16::RAW_BYTE_LEN
-    }
-    fn last_glyph_index_byte_range(&self) -> Range<usize> {
-        let start = self.first_glyph_index_byte_range().end;
-        start..start + GlyphId16::RAW_BYTE_LEN
-    }
-    fn additional_offset_to_index_subtable_byte_range(&self) -> Range<usize> {
-        let start = self.last_glyph_index_byte_range().end;
-        start..start + u32::RAW_BYTE_LEN
+        start..start + self.index_subtable_records_byte_len
     }
 }
 
-impl<'a> FontRead<'a> for IndexSubtableArray<'a> {
-    fn read(data: FontData<'a>) -> Result<Self, ReadError> {
+impl MinByteRange for IndexSubtableListMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.index_subtable_records_byte_range().end
+    }
+}
+
+impl ReadArgs for IndexSubtableList<'_> {
+    type Args = u32;
+}
+
+impl<'a> FontReadWithArgs<'a> for IndexSubtableList<'a> {
+    fn read_with_args(data: FontData<'a>, args: &u32) -> Result<Self, ReadError> {
+        let number_of_index_subtables = *args;
         let mut cursor = data.cursor();
-        cursor.advance::<GlyphId16>();
-        cursor.advance::<GlyphId16>();
-        cursor.advance::<u32>();
-        cursor.finish(IndexSubtableArrayMarker {})
+        let index_subtable_records_byte_len = (number_of_index_subtables as usize)
+            .checked_mul(IndexSubtableRecord::RAW_BYTE_LEN)
+            .ok_or(ReadError::OutOfBounds)?;
+        cursor.advance_by(index_subtable_records_byte_len);
+        cursor.finish(IndexSubtableListMarker {
+            index_subtable_records_byte_len,
+        })
     }
 }
 
-/// [IndexSubtableArray](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtablearray) table.
-pub type IndexSubtableArray<'a> = TableRef<'a, IndexSubtableArrayMarker>;
-
-impl<'a> IndexSubtableArray<'a> {
-    /// First glyph ID of this range.
-    pub fn first_glyph_index(&self) -> GlyphId16 {
-        let range = self.shape.first_glyph_index_byte_range();
-        self.data.read_at(range.start).unwrap()
+impl<'a> IndexSubtableList<'a> {
+    /// A constructor that requires additional arguments.
+    ///
+    /// This type requires some external state in order to be
+    /// parsed.
+    pub fn read(data: FontData<'a>, number_of_index_subtables: u32) -> Result<Self, ReadError> {
+        let args = number_of_index_subtables;
+        Self::read_with_args(data, &args)
     }
+}
 
-    /// Last glyph ID of this range (inclusive).
-    pub fn last_glyph_index(&self) -> GlyphId16 {
-        let range = self.shape.last_glyph_index_byte_range();
-        self.data.read_at(range.start).unwrap()
-    }
+/// [IndexSubtableList](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtablelist) table.
+pub type IndexSubtableList<'a> = TableRef<'a, IndexSubtableListMarker>;
 
-    /// Add to indexSubTableArrayOffset to get offset from beginning of EBLC.
-    pub fn additional_offset_to_index_subtable(&self) -> u32 {
-        let range = self.shape.additional_offset_to_index_subtable_byte_range();
-        self.data.read_at(range.start).unwrap()
+#[allow(clippy::needless_lifetimes)]
+impl<'a> IndexSubtableList<'a> {
+    /// Array of IndexSubtableRecords.
+    pub fn index_subtable_records(&self) -> &'a [IndexSubtableRecord] {
+        let range = self.shape.index_subtable_records_byte_range();
+        self.data.read_array(range).unwrap()
     }
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> SomeTable<'a> for IndexSubtableArray<'a> {
+impl<'a> SomeTable<'a> for IndexSubtableList<'a> {
     fn type_name(&self) -> &str {
-        "IndexSubtableArray"
+        "IndexSubtableList"
     }
     fn get_field(&self, idx: usize) -> Option<Field<'a>> {
         match idx {
-            0usize => Some(Field::new("first_glyph_index", self.first_glyph_index())),
-            1usize => Some(Field::new("last_glyph_index", self.last_glyph_index())),
-            2usize => Some(Field::new(
-                "additional_offset_to_index_subtable",
-                self.additional_offset_to_index_subtable(),
+            0usize => Some(Field::new(
+                "index_subtable_records",
+                traversal::FieldType::array_of_records(
+                    stringify!(IndexSubtableRecord),
+                    self.index_subtable_records(),
+                    self.offset_data(),
+                ),
             )),
             _ => None,
         }
@@ -808,109 +821,72 @@ impl<'a> SomeTable<'a> for IndexSubtableArray<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for IndexSubtableArray<'a> {
+#[allow(clippy::needless_lifetimes)]
+impl<'a> std::fmt::Debug for IndexSubtableList<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
     }
 }
 
-/// [IndexSubtables](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtables) format type.
-#[derive(Clone)]
-pub enum IndexSubtable<'a> {
-    Format1(IndexSubtable1<'a>),
-    Format2(IndexSubtable2<'a>),
-    Format3(IndexSubtable3<'a>),
-    Format4(IndexSubtable4<'a>),
-    Format5(IndexSubtable5<'a>),
+#[derive(Clone, Debug, Copy, bytemuck :: AnyBitPattern)]
+#[repr(C)]
+#[repr(packed)]
+pub struct IndexSubtableRecord {
+    /// First glyph ID of this range.
+    pub first_glyph_index: BigEndian<GlyphId16>,
+    /// Last glyph ID of this range (inclusive).
+    pub last_glyph_index: BigEndian<GlyphId16>,
+    /// Offset to an IndexSubtable from the start of the IndexSubtableList.
+    pub index_subtable_offset: BigEndian<Offset32>,
 }
 
-impl<'a> IndexSubtable<'a> {
-    ///Return the `FontData` used to resolve offsets for this table.
-    pub fn offset_data(&self) -> FontData<'a> {
-        match self {
-            Self::Format1(item) => item.offset_data(),
-            Self::Format2(item) => item.offset_data(),
-            Self::Format3(item) => item.offset_data(),
-            Self::Format4(item) => item.offset_data(),
-            Self::Format5(item) => item.offset_data(),
-        }
+impl IndexSubtableRecord {
+    /// First glyph ID of this range.
+    pub fn first_glyph_index(&self) -> GlyphId16 {
+        self.first_glyph_index.get()
     }
 
-    /// Format of this IndexSubTable.
-    pub fn index_format(&self) -> u16 {
-        match self {
-            Self::Format1(item) => item.index_format(),
-            Self::Format2(item) => item.index_format(),
-            Self::Format3(item) => item.index_format(),
-            Self::Format4(item) => item.index_format(),
-            Self::Format5(item) => item.index_format(),
-        }
+    /// Last glyph ID of this range (inclusive).
+    pub fn last_glyph_index(&self) -> GlyphId16 {
+        self.last_glyph_index.get()
     }
 
-    /// Format of EBDT image data.
-    pub fn image_format(&self) -> u16 {
-        match self {
-            Self::Format1(item) => item.image_format(),
-            Self::Format2(item) => item.image_format(),
-            Self::Format3(item) => item.image_format(),
-            Self::Format4(item) => item.image_format(),
-            Self::Format5(item) => item.image_format(),
-        }
+    /// Offset to an IndexSubtable from the start of the IndexSubtableList.
+    pub fn index_subtable_offset(&self) -> Offset32 {
+        self.index_subtable_offset.get()
     }
 
-    /// Offset to image data in EBDT table.
-    pub fn image_data_offset(&self) -> u32 {
-        match self {
-            Self::Format1(item) => item.image_data_offset(),
-            Self::Format2(item) => item.image_data_offset(),
-            Self::Format3(item) => item.image_data_offset(),
-            Self::Format4(item) => item.image_data_offset(),
-            Self::Format5(item) => item.image_data_offset(),
-        }
+    /// Offset to an IndexSubtable from the start of the IndexSubtableList.
+    ///
+    /// The `data` argument should be retrieved from the parent table
+    /// By calling its `offset_data` method.
+    pub fn index_subtable<'a>(&self, data: FontData<'a>) -> Result<IndexSubtable<'a>, ReadError> {
+        let args = (self.last_glyph_index(), self.first_glyph_index());
+        self.index_subtable_offset().resolve_with_args(data, &args)
     }
 }
 
-impl<'a> FontRead<'a> for IndexSubtable<'a> {
-    fn read(data: FontData<'a>) -> Result<Self, ReadError> {
-        let format: u16 = data.read_at(0usize)?;
-        match format {
-            IndexSubtable1Marker::FORMAT => Ok(Self::Format1(FontRead::read(data)?)),
-            IndexSubtable2Marker::FORMAT => Ok(Self::Format2(FontRead::read(data)?)),
-            IndexSubtable3Marker::FORMAT => Ok(Self::Format3(FontRead::read(data)?)),
-            IndexSubtable4Marker::FORMAT => Ok(Self::Format4(FontRead::read(data)?)),
-            IndexSubtable5Marker::FORMAT => Ok(Self::Format5(FontRead::read(data)?)),
-            other => Err(ReadError::InvalidFormat(other.into())),
-        }
-    }
+impl FixedSize for IndexSubtableRecord {
+    const RAW_BYTE_LEN: usize =
+        GlyphId16::RAW_BYTE_LEN + GlyphId16::RAW_BYTE_LEN + Offset32::RAW_BYTE_LEN;
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> IndexSubtable<'a> {
-    fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
-        match self {
-            Self::Format1(table) => table,
-            Self::Format2(table) => table,
-            Self::Format3(table) => table,
-            Self::Format4(table) => table,
-            Self::Format5(table) => table,
+impl<'a> SomeRecord<'a> for IndexSubtableRecord {
+    fn traverse(self, data: FontData<'a>) -> RecordResolver<'a> {
+        RecordResolver {
+            name: "IndexSubtableRecord",
+            get_field: Box::new(move |idx, _data| match idx {
+                0usize => Some(Field::new("first_glyph_index", self.first_glyph_index())),
+                1usize => Some(Field::new("last_glyph_index", self.last_glyph_index())),
+                2usize => Some(Field::new(
+                    "index_subtable_offset",
+                    FieldType::offset(self.index_subtable_offset(), self.index_subtable(_data)),
+                )),
+                _ => None,
+            }),
+            data,
         }
-    }
-}
-
-#[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for IndexSubtable<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.dyn_inner().fmt(f)
-    }
-}
-
-#[cfg(feature = "experimental_traverse")]
-impl<'a> SomeTable<'a> for IndexSubtable<'a> {
-    fn type_name(&self) -> &str {
-        self.dyn_inner().type_name()
-    }
-    fn get_field(&self, idx: usize) -> Option<Field<'a>> {
-        self.dyn_inner().get_field(idx)
     }
 }
 
@@ -926,32 +902,51 @@ pub struct IndexSubtable1Marker {
 }
 
 impl IndexSubtable1Marker {
-    fn index_format_byte_range(&self) -> Range<usize> {
+    pub fn index_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_format_byte_range(&self) -> Range<usize> {
+
+    pub fn image_format_byte_range(&self) -> Range<usize> {
         let start = self.index_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_data_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn image_data_offset_byte_range(&self) -> Range<usize> {
         let start = self.image_format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn sbit_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn sbit_offsets_byte_range(&self) -> Range<usize> {
         let start = self.image_data_offset_byte_range().end;
         start..start + self.sbit_offsets_byte_len
     }
 }
 
-impl<'a> FontRead<'a> for IndexSubtable1<'a> {
-    fn read(data: FontData<'a>) -> Result<Self, ReadError> {
+impl MinByteRange for IndexSubtable1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.sbit_offsets_byte_range().end
+    }
+}
+
+impl ReadArgs for IndexSubtable1<'_> {
+    type Args = (GlyphId16, GlyphId16);
+}
+
+impl<'a> FontReadWithArgs<'a> for IndexSubtable1<'a> {
+    fn read_with_args(
+        data: FontData<'a>,
+        args: &(GlyphId16, GlyphId16),
+    ) -> Result<Self, ReadError> {
+        let (last_glyph_index, first_glyph_index) = *args;
         let mut cursor = data.cursor();
         cursor.advance::<u16>();
         cursor.advance::<u16>();
         cursor.advance::<u32>();
         let sbit_offsets_byte_len =
-            cursor.remaining_bytes() / u32::RAW_BYTE_LEN * u32::RAW_BYTE_LEN;
+            (transforms::subtract_add_two(last_glyph_index, first_glyph_index))
+                .checked_mul(u32::RAW_BYTE_LEN)
+                .ok_or(ReadError::OutOfBounds)?;
         cursor.advance_by(sbit_offsets_byte_len);
         cursor.finish(IndexSubtable1Marker {
             sbit_offsets_byte_len,
@@ -959,9 +954,25 @@ impl<'a> FontRead<'a> for IndexSubtable1<'a> {
     }
 }
 
+impl<'a> IndexSubtable1<'a> {
+    /// A constructor that requires additional arguments.
+    ///
+    /// This type requires some external state in order to be
+    /// parsed.
+    pub fn read(
+        data: FontData<'a>,
+        last_glyph_index: GlyphId16,
+        first_glyph_index: GlyphId16,
+    ) -> Result<Self, ReadError> {
+        let args = (last_glyph_index, first_glyph_index);
+        Self::read_with_args(data, &args)
+    }
+}
+
 /// [IndexSubTable1](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtable1-variable-metrics-glyphs-with-4-byte-offsets): variable-metrics glyphs with 4-byte offsets.
 pub type IndexSubtable1<'a> = TableRef<'a, IndexSubtable1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> IndexSubtable1<'a> {
     /// Format of this IndexSubTable.
     pub fn index_format(&self) -> u16 {
@@ -1004,6 +1015,7 @@ impl<'a> SomeTable<'a> for IndexSubtable1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for IndexSubtable1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1022,25 +1034,35 @@ pub struct IndexSubtable2Marker {
 }
 
 impl IndexSubtable2Marker {
-    fn index_format_byte_range(&self) -> Range<usize> {
+    pub fn index_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_format_byte_range(&self) -> Range<usize> {
+
+    pub fn image_format_byte_range(&self) -> Range<usize> {
         let start = self.index_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_data_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn image_data_offset_byte_range(&self) -> Range<usize> {
         let start = self.image_format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn image_size_byte_range(&self) -> Range<usize> {
+
+    pub fn image_size_byte_range(&self) -> Range<usize> {
         let start = self.image_data_offset_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn big_metrics_byte_range(&self) -> Range<usize> {
+
+    pub fn big_metrics_byte_range(&self) -> Range<usize> {
         let start = self.image_size_byte_range().end;
         start..start + self.big_metrics_byte_len
+    }
+}
+
+impl MinByteRange for IndexSubtable2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.big_metrics_byte_range().end
     }
 }
 
@@ -1062,6 +1084,7 @@ impl<'a> FontRead<'a> for IndexSubtable2<'a> {
 /// [IndexSubTable2](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtable2-all-glyphs-have-identical-metrics): all glyphs have identical metrics.
 pub type IndexSubtable2<'a> = TableRef<'a, IndexSubtable2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> IndexSubtable2<'a> {
     /// Format of this IndexSubTable.
     pub fn index_format(&self) -> u16 {
@@ -1119,6 +1142,7 @@ impl<'a> SomeTable<'a> for IndexSubtable2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for IndexSubtable2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1137,32 +1161,51 @@ pub struct IndexSubtable3Marker {
 }
 
 impl IndexSubtable3Marker {
-    fn index_format_byte_range(&self) -> Range<usize> {
+    pub fn index_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_format_byte_range(&self) -> Range<usize> {
+
+    pub fn image_format_byte_range(&self) -> Range<usize> {
         let start = self.index_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_data_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn image_data_offset_byte_range(&self) -> Range<usize> {
         let start = self.image_format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn sbit_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn sbit_offsets_byte_range(&self) -> Range<usize> {
         let start = self.image_data_offset_byte_range().end;
         start..start + self.sbit_offsets_byte_len
     }
 }
 
-impl<'a> FontRead<'a> for IndexSubtable3<'a> {
-    fn read(data: FontData<'a>) -> Result<Self, ReadError> {
+impl MinByteRange for IndexSubtable3Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.sbit_offsets_byte_range().end
+    }
+}
+
+impl ReadArgs for IndexSubtable3<'_> {
+    type Args = (GlyphId16, GlyphId16);
+}
+
+impl<'a> FontReadWithArgs<'a> for IndexSubtable3<'a> {
+    fn read_with_args(
+        data: FontData<'a>,
+        args: &(GlyphId16, GlyphId16),
+    ) -> Result<Self, ReadError> {
+        let (last_glyph_index, first_glyph_index) = *args;
         let mut cursor = data.cursor();
         cursor.advance::<u16>();
         cursor.advance::<u16>();
         cursor.advance::<u32>();
         let sbit_offsets_byte_len =
-            cursor.remaining_bytes() / u16::RAW_BYTE_LEN * u16::RAW_BYTE_LEN;
+            (transforms::subtract_add_two(last_glyph_index, first_glyph_index))
+                .checked_mul(u16::RAW_BYTE_LEN)
+                .ok_or(ReadError::OutOfBounds)?;
         cursor.advance_by(sbit_offsets_byte_len);
         cursor.finish(IndexSubtable3Marker {
             sbit_offsets_byte_len,
@@ -1170,9 +1213,25 @@ impl<'a> FontRead<'a> for IndexSubtable3<'a> {
     }
 }
 
+impl<'a> IndexSubtable3<'a> {
+    /// A constructor that requires additional arguments.
+    ///
+    /// This type requires some external state in order to be
+    /// parsed.
+    pub fn read(
+        data: FontData<'a>,
+        last_glyph_index: GlyphId16,
+        first_glyph_index: GlyphId16,
+    ) -> Result<Self, ReadError> {
+        let args = (last_glyph_index, first_glyph_index);
+        Self::read_with_args(data, &args)
+    }
+}
+
 /// [IndexSubTable3](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtable3-variable-metrics-glyphs-with-2-byte-offsets): variable-metrics glyphs with 2-byte offsets.
 pub type IndexSubtable3<'a> = TableRef<'a, IndexSubtable3Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> IndexSubtable3<'a> {
     /// Format of this IndexSubTable.
     pub fn index_format(&self) -> u16 {
@@ -1215,6 +1274,7 @@ impl<'a> SomeTable<'a> for IndexSubtable3<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for IndexSubtable3<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1233,25 +1293,35 @@ pub struct IndexSubtable4Marker {
 }
 
 impl IndexSubtable4Marker {
-    fn index_format_byte_range(&self) -> Range<usize> {
+    pub fn index_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_format_byte_range(&self) -> Range<usize> {
+
+    pub fn image_format_byte_range(&self) -> Range<usize> {
         let start = self.index_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_data_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn image_data_offset_byte_range(&self) -> Range<usize> {
         let start = self.image_format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn num_glyphs_byte_range(&self) -> Range<usize> {
+
+    pub fn num_glyphs_byte_range(&self) -> Range<usize> {
         let start = self.image_data_offset_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn glyph_array_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_array_byte_range(&self) -> Range<usize> {
         let start = self.num_glyphs_byte_range().end;
         start..start + self.glyph_array_byte_len
+    }
+}
+
+impl MinByteRange for IndexSubtable4Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.glyph_array_byte_range().end
     }
 }
 
@@ -1275,6 +1345,7 @@ impl<'a> FontRead<'a> for IndexSubtable4<'a> {
 /// [IndexSubTable4](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtable3-variable-metrics-glyphs-with-2-byte-offsets): variable-metrics glyphs with sparse glyph codes.
 pub type IndexSubtable4<'a> = TableRef<'a, IndexSubtable4Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> IndexSubtable4<'a> {
     /// Format of this IndexSubTable.
     pub fn index_format(&self) -> u16 {
@@ -1332,6 +1403,7 @@ impl<'a> SomeTable<'a> for IndexSubtable4<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for IndexSubtable4<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1393,33 +1465,45 @@ pub struct IndexSubtable5Marker {
 }
 
 impl IndexSubtable5Marker {
-    fn index_format_byte_range(&self) -> Range<usize> {
+    pub fn index_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_format_byte_range(&self) -> Range<usize> {
+
+    pub fn image_format_byte_range(&self) -> Range<usize> {
         let start = self.index_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn image_data_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn image_data_offset_byte_range(&self) -> Range<usize> {
         let start = self.image_format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn image_size_byte_range(&self) -> Range<usize> {
+
+    pub fn image_size_byte_range(&self) -> Range<usize> {
         let start = self.image_data_offset_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn big_metrics_byte_range(&self) -> Range<usize> {
+
+    pub fn big_metrics_byte_range(&self) -> Range<usize> {
         let start = self.image_size_byte_range().end;
         start..start + self.big_metrics_byte_len
     }
-    fn num_glyphs_byte_range(&self) -> Range<usize> {
+
+    pub fn num_glyphs_byte_range(&self) -> Range<usize> {
         let start = self.big_metrics_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn glyph_array_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_array_byte_range(&self) -> Range<usize> {
         let start = self.num_glyphs_byte_range().end;
         start..start + self.glyph_array_byte_len
+    }
+}
+
+impl MinByteRange for IndexSubtable5Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.glyph_array_byte_range().end
     }
 }
 
@@ -1447,6 +1531,7 @@ impl<'a> FontRead<'a> for IndexSubtable5<'a> {
 /// [IndexSubTable5](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#indexsubtable5-constant-metrics-glyphs-with-sparse-glyph-codes): constant-metrics glyphs with sparse glyph codes
 pub type IndexSubtable5<'a> = TableRef<'a, IndexSubtable5Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> IndexSubtable5<'a> {
     /// Format of this IndexSubTable.
     pub fn index_format(&self) -> u16 {
@@ -1518,6 +1603,7 @@ impl<'a> SomeTable<'a> for IndexSubtable5<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for IndexSubtable5<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

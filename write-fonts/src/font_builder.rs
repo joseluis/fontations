@@ -6,6 +6,8 @@ use std::{borrow::Cow, fmt::Display};
 use read_fonts::{FontRef, TableProvider};
 use types::{Tag, TT_SFNT_VERSION};
 
+use crate::util::SearchRange;
+
 include!("../generated/generated_font.rs");
 
 const TABLE_RECORD_LEN: usize = 16;
@@ -32,19 +34,14 @@ pub struct BuilderError {
 impl TableDirectory {
     pub fn from_table_records(table_records: Vec<TableRecord>) -> TableDirectory {
         assert!(table_records.len() <= u16::MAX as usize);
-
         // See https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory
-        // Computation works at the largest allowable num tables so don't stress the as u16's
-        let entry_selector = (table_records.len() as f64).log2().floor() as u16;
-        let search_range = (2.0_f64.powi(entry_selector as i32) * 16.0) as u16;
-        // The result doesn't really make sense with 0 tables but ... let's at least not fail
-        let range_shift = (table_records.len() * 16).saturating_sub(search_range as usize) as u16;
+        let computed = SearchRange::compute(table_records.len(), TABLE_RECORD_LEN);
 
         TableDirectory::new(
             TT_SFNT_VERSION,
-            search_range,
-            entry_selector,
-            range_shift,
+            computed.search_range,
+            computed.entry_selector,
+            computed.range_shift,
             table_records,
         )
     }
@@ -139,23 +136,9 @@ fn round4(sz: usize) -> usize {
 }
 
 fn checksum_and_padding(table: &[u8]) -> (u32, u32) {
+    let checksum = read_fonts::tables::compute_checksum(table);
     let padding = round4(table.len()) - table.len();
-    let mut sum = 0u32;
-    let mut iter = table.chunks_exact(4);
-    for quad in &mut iter {
-        // this can't fail, and we trust the compiler to avoid a branch
-        let array: [u8; 4] = quad.try_into().unwrap_or_default();
-        sum = sum.wrapping_add(u32::from_be_bytes(array));
-    }
-
-    let rem = match *iter.remainder() {
-        [a] => u32::from_be_bytes([a, 0, 0, 0]),
-        [a, b] => u32::from_be_bytes([a, b, 0, 0]),
-        [a, b, c] => u32::from_be_bytes([a, b, c, 0]),
-        _ => 0,
-    };
-
-    (sum.wrapping_add(rem), padding as u32)
+    (checksum, padding as u32)
 }
 
 impl TTCHeader {

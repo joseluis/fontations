@@ -14,17 +14,25 @@ impl Format<u16> for Table1Marker {
 pub struct Table1Marker {}
 
 impl Table1Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn heft_byte_range(&self) -> Range<usize> {
+
+    pub fn heft_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn flex_byte_range(&self) -> Range<usize> {
+
+    pub fn flex_byte_range(&self) -> Range<usize> {
         let start = self.heft_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for Table1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.flex_byte_range().end
     }
 }
 
@@ -40,6 +48,7 @@ impl<'a> FontRead<'a> for Table1<'a> {
 
 pub type Table1<'a> = TableRef<'a, Table1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Table1<'a> {
     pub fn format(&self) -> u16 {
         let range = self.shape.format_byte_range();
@@ -73,6 +82,7 @@ impl<'a> SomeTable<'a> for Table1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Table1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -90,17 +100,25 @@ pub struct Table2Marker {
 }
 
 impl Table2Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn value_count_byte_range(&self) -> Range<usize> {
+
+    pub fn value_count_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn values_byte_range(&self) -> Range<usize> {
+
+    pub fn values_byte_range(&self) -> Range<usize> {
         let start = self.value_count_byte_range().end;
         start..start + self.values_byte_len
+    }
+}
+
+impl MinByteRange for Table2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.values_byte_range().end
     }
 }
 
@@ -119,6 +137,7 @@ impl<'a> FontRead<'a> for Table2<'a> {
 
 pub type Table2<'a> = TableRef<'a, Table2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Table2<'a> {
     pub fn format(&self) -> u16 {
         let range = self.shape.format_byte_range();
@@ -152,6 +171,7 @@ impl<'a> SomeTable<'a> for Table2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Table2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -167,13 +187,20 @@ impl Format<u16> for Table3Marker {
 pub struct Table3Marker {}
 
 impl Table3Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn something_byte_range(&self) -> Range<usize> {
+
+    pub fn something_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for Table3Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.something_byte_range().end
     }
 }
 
@@ -188,6 +215,7 @@ impl<'a> FontRead<'a> for Table3<'a> {
 
 pub type Table3<'a> = TableRef<'a, Table3Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Table3<'a> {
     pub fn format(&self) -> u16 {
         let range = self.shape.format_byte_range();
@@ -215,6 +243,7 @@ impl<'a> SomeTable<'a> for Table3<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Table3<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -259,6 +288,16 @@ impl<'a> FontRead<'a> for MyTable<'a> {
     }
 }
 
+impl MinByteRange for MyTable<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1(item) => item.min_byte_range(),
+            Self::MyFormat22(item) => item.min_byte_range(),
+            Self::Format3(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> MyTable<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -271,7 +310,7 @@ impl<'a> MyTable<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for MyTable<'a> {
+impl std::fmt::Debug for MyTable<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }

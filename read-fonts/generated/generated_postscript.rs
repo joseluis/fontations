@@ -14,21 +14,30 @@ pub struct Index1Marker {
 }
 
 impl Index1Marker {
-    fn count_byte_range(&self) -> Range<usize> {
+    pub fn count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn off_size_byte_range(&self) -> Range<usize> {
+
+    pub fn off_size_byte_range(&self) -> Range<usize> {
         let start = self.count_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn offsets_byte_range(&self) -> Range<usize> {
         let start = self.off_size_byte_range().end;
         start..start + self.offsets_byte_len
     }
-    fn data_byte_range(&self) -> Range<usize> {
+
+    pub fn data_byte_range(&self) -> Range<usize> {
         let start = self.offsets_byte_range().end;
         start..start + self.data_byte_len
+    }
+}
+
+impl MinByteRange for Index1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.data_byte_range().end
     }
 }
 
@@ -53,6 +62,7 @@ impl<'a> FontRead<'a> for Index1<'a> {
 /// An array of variable-sized objects in a `CFF` table.
 pub type Index1<'a> = TableRef<'a, Index1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Index1<'a> {
     /// Number of objects stored in INDEX.
     pub fn count(&self) -> u16 {
@@ -96,6 +106,7 @@ impl<'a> SomeTable<'a> for Index1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Index1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -111,21 +122,30 @@ pub struct Index2Marker {
 }
 
 impl Index2Marker {
-    fn count_byte_range(&self) -> Range<usize> {
+    pub fn count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn off_size_byte_range(&self) -> Range<usize> {
+
+    pub fn off_size_byte_range(&self) -> Range<usize> {
         let start = self.count_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn offsets_byte_range(&self) -> Range<usize> {
         let start = self.off_size_byte_range().end;
         start..start + self.offsets_byte_len
     }
-    fn data_byte_range(&self) -> Range<usize> {
+
+    pub fn data_byte_range(&self) -> Range<usize> {
         let start = self.offsets_byte_range().end;
         start..start + self.data_byte_len
+    }
+}
+
+impl MinByteRange for Index2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.data_byte_range().end
     }
 }
 
@@ -150,6 +170,7 @@ impl<'a> FontRead<'a> for Index2<'a> {
 /// An array of variable-sized objects in a `CFF2` table.
 pub type Index2<'a> = TableRef<'a, Index2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Index2<'a> {
     /// Number of objects stored in INDEX.
     pub fn count(&self) -> u32 {
@@ -193,6 +214,7 @@ impl<'a> SomeTable<'a> for Index2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Index2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -239,6 +261,16 @@ impl<'a> FontRead<'a> for FdSelect<'a> {
     }
 }
 
+impl MinByteRange for FdSelect<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format0(item) => item.min_byte_range(),
+            Self::Format3(item) => item.min_byte_range(),
+            Self::Format4(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> FdSelect<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -251,7 +283,7 @@ impl<'a> FdSelect<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for FdSelect<'a> {
+impl std::fmt::Debug for FdSelect<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -279,13 +311,20 @@ pub struct FdSelectFormat0Marker {
 }
 
 impl FdSelectFormat0Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn fds_byte_range(&self) -> Range<usize> {
+
+    pub fn fds_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + self.fds_byte_len
+    }
+}
+
+impl MinByteRange for FdSelectFormat0Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.fds_byte_range().end
     }
 }
 
@@ -302,6 +341,7 @@ impl<'a> FontRead<'a> for FdSelectFormat0<'a> {
 /// FdSelect format 0.
 pub type FdSelectFormat0<'a> = TableRef<'a, FdSelectFormat0Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FdSelectFormat0<'a> {
     /// Format = 0.
     pub fn format(&self) -> u8 {
@@ -331,6 +371,7 @@ impl<'a> SomeTable<'a> for FdSelectFormat0<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FdSelectFormat0<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -349,21 +390,30 @@ pub struct FdSelectFormat3Marker {
 }
 
 impl FdSelectFormat3Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn n_ranges_byte_range(&self) -> Range<usize> {
+
+    pub fn n_ranges_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn ranges_byte_range(&self) -> Range<usize> {
+
+    pub fn ranges_byte_range(&self) -> Range<usize> {
         let start = self.n_ranges_byte_range().end;
         start..start + self.ranges_byte_len
     }
-    fn sentinel_byte_range(&self) -> Range<usize> {
+
+    pub fn sentinel_byte_range(&self) -> Range<usize> {
         let start = self.ranges_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for FdSelectFormat3Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.sentinel_byte_range().end
     }
 }
 
@@ -384,6 +434,7 @@ impl<'a> FontRead<'a> for FdSelectFormat3<'a> {
 /// FdSelect format 3.
 pub type FdSelectFormat3<'a> = TableRef<'a, FdSelectFormat3Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FdSelectFormat3<'a> {
     /// Format = 3.
     pub fn format(&self) -> u8 {
@@ -434,6 +485,7 @@ impl<'a> SomeTable<'a> for FdSelectFormat3<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FdSelectFormat3<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -494,21 +546,30 @@ pub struct FdSelectFormat4Marker {
 }
 
 impl FdSelectFormat4Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn n_ranges_byte_range(&self) -> Range<usize> {
+
+    pub fn n_ranges_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn ranges_byte_range(&self) -> Range<usize> {
+
+    pub fn ranges_byte_range(&self) -> Range<usize> {
         let start = self.n_ranges_byte_range().end;
         start..start + self.ranges_byte_len
     }
-    fn sentinel_byte_range(&self) -> Range<usize> {
+
+    pub fn sentinel_byte_range(&self) -> Range<usize> {
         let start = self.ranges_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for FdSelectFormat4Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.sentinel_byte_range().end
     }
 }
 
@@ -529,6 +590,7 @@ impl<'a> FontRead<'a> for FdSelectFormat4<'a> {
 /// FdSelect format 4.
 pub type FdSelectFormat4<'a> = TableRef<'a, FdSelectFormat4Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FdSelectFormat4<'a> {
     /// Format = 4.
     pub fn format(&self) -> u8 {
@@ -579,6 +641,7 @@ impl<'a> SomeTable<'a> for FdSelectFormat4<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FdSelectFormat4<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

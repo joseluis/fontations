@@ -17,8 +17,10 @@ release = false
 [dependencies]
 libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
 font-types = { workspace = true }
-read-fonts = { workspace = true, default-features = true }
+read-fonts = { workspace = true, default-features = true, features = ["ift"] }
+write-fonts = { workspace = true, default-features = true, features = ["ift"] }
 skrifa = { workspace = true }
+incremental-font-transfer = { workspace = true }
 
 [[bin]]
 name = "fuzz_skrifa_charmap"
@@ -53,6 +55,18 @@ doc = false
 [[bin]]
 name = "fuzz_int_set"
 path = "fuzz_targets/fuzz_int_set.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_range_set"
+path = "fuzz_targets/fuzz_range_set.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_ift_patch_group"
+path = "fuzz_targets/fuzz_ift_patch_group.rs"
 test = false
 doc = false
 

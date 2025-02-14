@@ -4,7 +4,7 @@ use super::variations::{DeltaSetIndexMap, ItemVariationStore};
 
 include!("../../generated/generated_avar.rs");
 
-impl<'a> SegmentMaps<'a> {
+impl SegmentMaps<'_> {
     /// Applies the piecewise linear mapping to the specified coordinate.
     pub fn apply(&self, coord: Fixed) -> Fixed {
         let mut prev = AxisValueMap {
@@ -33,7 +33,7 @@ impl<'a> SegmentMaps<'a> {
     }
 }
 
-impl<'a> VarSize for SegmentMaps<'a> {
+impl VarSize for SegmentMaps<'_> {
     type Size = u16;
 
     fn read_len_at(data: FontData, pos: usize) -> Option<usize> {
@@ -59,8 +59,10 @@ impl<'a> FontRead<'a> for SegmentMaps<'a> {
 #[cfg(test)]
 mod tests {
 
+    use font_test_data::bebuffer::BeBuffer;
+
     use super::*;
-    use crate::{test_helpers, FontRef, TableProvider};
+    use crate::{FontRef, TableProvider};
 
     fn value_map(from: f32, to: f32) -> [F2Dot14; 2] {
         [F2Dot14::from_f32(from), F2Dot14::from_f32(to)]
@@ -100,8 +102,6 @@ mod tests {
 
     #[test]
     fn segment_maps_multi_axis() {
-        use test_helpers::BeBuffer;
-
         let segment_one_maps = [
             value_map(-1.0, -1.0),
             value_map(-0.6667, -0.5),
@@ -123,7 +123,7 @@ mod tests {
             .extend(segment_two_maps[0])
             .extend(segment_two_maps[1]);
 
-        let avar = super::Avar::read(data.font_data()).unwrap();
+        let avar = super::Avar::read(data.data().into()).unwrap();
         assert_eq!(avar.axis_segment_maps().iter().count(), 2);
         assert_eq!(
             avar.axis_segment_maps()

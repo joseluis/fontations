@@ -4,7 +4,8 @@ include!("../../generated/generated_cmap.rs");
 
 #[cfg(feature = "std")]
 use crate::collections::IntSet;
-use std::ops::{Range, RangeInclusive};
+use crate::{FontRef, TableProvider};
+use std::ops::Range;
 
 /// Result of mapping a codepoint with a variation selector.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -17,7 +18,7 @@ pub enum MapVariant {
     Variant(GlyphId),
 }
 
-impl<'a> Cmap<'a> {
+impl Cmap<'_> {
     /// Map a codepoint to a nominal glyph identifier
     ///
     /// This uses the first available subtable that provides a valid mapping.
@@ -56,6 +57,21 @@ impl<'a> Cmap<'a> {
                     }
                 }
             }
+        }
+    }
+}
+
+impl CmapSubtable<'_> {
+    pub fn language(&self) -> u32 {
+        match self {
+            Self::Format0(item) => item.language() as u32,
+            Self::Format2(item) => item.language() as u32,
+            Self::Format4(item) => item.language() as u32,
+            Self::Format6(item) => item.language() as u32,
+            Self::Format10(item) => item.language(),
+            Self::Format12(item) => item.language(),
+            Self::Format13(item) => item.language(),
+            _ => 0,
         }
     }
 }
@@ -143,7 +159,7 @@ impl<'a> Cmap4Iter<'a> {
     }
 }
 
-impl<'a> Iterator for Cmap4Iter<'a> {
+impl Iterator for Cmap4Iter<'_> {
     type Item = (u32, GlyphId);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -207,8 +223,18 @@ impl<'a> Cmap12<'a> {
 
     /// Returns an iterator over all (codepoint, glyph identifier) pairs
     /// in the subtable.
+    ///
+    /// Malicious and malformed fonts can produce a large number of invalid
+    /// pairs. Use [`Self::iter_with_limits`] to generate a pruned sequence
+    /// that is limited to reasonable values.
     pub fn iter(&self) -> Cmap12Iter<'a> {
-        Cmap12Iter::new(self.clone())
+        Cmap12Iter::new(self.clone(), None)
+    }
+
+    /// Returns an iterator over all (codepoint, glyph identifier) pairs
+    /// in the subtable within the given limits.
+    pub fn iter_with_limits(&self, limits: Cmap12IterLimits) -> Cmap12Iter<'a> {
+        Cmap12Iter::new(self.clone(), Some(limits))
     }
 
     /// Does the final phase of glyph id lookup.
@@ -225,25 +251,75 @@ impl<'a> Cmap12<'a> {
 
     /// Returns the codepoint range and start glyph id for the group
     /// at the given index.
-    fn group(&self, index: usize) -> Option<Cmap12Group> {
+    fn group(&self, index: usize, limits: &Option<Cmap12IterLimits>) -> Option<Cmap12Group> {
         let group = self.groups().get(index)?;
         let start_code = group.start_char_code();
-        // Limit to the valid range of Unicode characters
-        // per https://github.com/googlefonts/fontations/issues/952#issuecomment-2161510184
-        let end_code = group.end_char_code().min(char::MAX as u32);
+        // Change to exclusive range. This can never overflow since the source
+        // is a 32-bit value
+        let end_code = group.end_char_code() as u64 + 1;
+        let start_glyph_id = group.start_glyph_id();
+        let end_code = if let Some(limits) = limits {
+            // Set our end code to the minimum of our character and glyph
+            // count limit
+            (limits.glyph_count as u64)
+                .saturating_sub(start_glyph_id as u64)
+                .saturating_add(start_code as u64)
+                .min(end_code.min(limits.max_char as u64))
+        } else {
+            end_code
+        };
         Some(Cmap12Group {
-            range: start_code..=end_code,
+            range: start_code as u64..end_code,
             start_code,
-            start_glyph_id: group.start_glyph_id(),
+            start_glyph_id,
         })
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Cmap12Group {
-    range: RangeInclusive<u32>,
+    range: Range<u64>,
     start_code: u32,
     start_glyph_id: u32,
+}
+
+/// Character and glyph limits for iterating format 12 subtables.
+#[derive(Copy, Clone, Debug)]
+pub struct Cmap12IterLimits {
+    /// The maximum valid character.
+    pub max_char: u32,
+    /// The number of glyphs in the font.
+    pub glyph_count: u32,
+}
+
+impl Cmap12IterLimits {
+    /// Returns the default limits for the given font.
+    ///
+    /// This will limit pairs to `char::MAX` and the number of glyphs contained
+    /// in the font. If the font is missing a `maxp` table, the number of
+    /// glyphs will be limited to `u16::MAX`.
+    pub fn default_for_font(font: &FontRef) -> Self {
+        let glyph_count = font
+            .maxp()
+            .map(|maxp| maxp.num_glyphs())
+            .unwrap_or(u16::MAX) as u32;
+        Self {
+            // Limit to the valid range of Unicode characters
+            // per https://github.com/googlefonts/fontations/issues/952#issuecomment-2161510184
+            max_char: char::MAX as u32,
+            glyph_count,
+        }
+    }
+}
+
+impl Default for Cmap12IterLimits {
+    fn default() -> Self {
+        Self {
+            max_char: char::MAX as u32,
+            // Revisit this when we actually support big glyph ids
+            glyph_count: u16::MAX as u32,
+        }
+    }
 }
 
 /// Iterator over all (codepoint, glyph identifier) pairs in
@@ -253,26 +329,29 @@ pub struct Cmap12Iter<'a> {
     subtable: Cmap12<'a>,
     cur_group: Option<Cmap12Group>,
     cur_group_ix: usize,
+    limits: Option<Cmap12IterLimits>,
 }
 
 impl<'a> Cmap12Iter<'a> {
-    fn new(subtable: Cmap12<'a>) -> Self {
-        let cur_group = subtable.group(0);
+    fn new(subtable: Cmap12<'a>, limits: Option<Cmap12IterLimits>) -> Self {
+        let cur_group = subtable.group(0, &limits);
         Self {
             subtable,
             cur_group,
             cur_group_ix: 0,
+            limits,
         }
     }
 }
 
-impl<'a> Iterator for Cmap12Iter<'a> {
+impl Iterator for Cmap12Iter<'_> {
     type Item = (u32, GlyphId);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let group = self.cur_group.as_mut()?;
             if let Some(codepoint) = group.range.next() {
+                let codepoint = codepoint as u32;
                 let glyph_id = self.subtable.lookup_glyph_id(
                     codepoint,
                     group.start_code,
@@ -286,14 +365,12 @@ impl<'a> Iterator for Cmap12Iter<'a> {
                 return Some((codepoint, glyph_id));
             } else {
                 self.cur_group_ix += 1;
-                let mut next_group = self.subtable.group(self.cur_group_ix)?;
+                let mut next_group = self.subtable.group(self.cur_group_ix, &self.limits)?;
                 // Groups should be in order and non-overlapping so make sure
                 // that the start code of next group is at least
-                // current_end + 1.
-                // This ensures we only ever generate a maximum of
-                // char::MAX + 1 results.
-                if next_group.range.start() <= group.range.end() {
-                    next_group.range = *group.range.end() + 1..=*next_group.range.end();
+                // current_end.
+                if next_group.range.start < group.range.end {
+                    next_group.range = group.range.end..next_group.range.end;
                 }
                 self.cur_group = Some(next_group);
             }
@@ -392,6 +469,9 @@ impl<'a> Cmap14<'a> {
     #[cfg(feature = "std")]
     pub fn closure_glyphs(&self, unicodes: &IntSet<u32>, glyph_set: &mut IntSet<GlyphId>) {
         for selector in self.var_selector() {
+            if !unicodes.contains(selector.var_selector().to_u32()) {
+                continue;
+            }
             if let Some(non_default_uvs) = selector
                 .non_default_uvs(self.offset_data())
                 .transpose()
@@ -434,7 +514,7 @@ impl<'a> Cmap14Iter<'a> {
     }
 }
 
-impl<'a> Iterator for Cmap14Iter<'a> {
+impl Iterator for Cmap14Iter<'_> {
     type Item = (u32, u32, MapVariant);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -481,7 +561,7 @@ impl<'a> DefaultUvsIter<'a> {
     }
 }
 
-impl<'a> Iterator for DefaultUvsIter<'a> {
+impl Iterator for DefaultUvsIter<'_> {
     type Item = u32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -510,7 +590,7 @@ impl<'a> NonDefaultUvsIter<'a> {
     }
 }
 
-impl<'a> Iterator for NonDefaultUvsIter<'a> {
+impl Iterator for NonDefaultUvsIter<'_> {
     type Item = (u32, GlyphId16);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -523,10 +603,10 @@ impl<'a> Iterator for NonDefaultUvsIter<'a> {
 
 #[cfg(test)]
 mod tests {
+    use font_test_data::{be_buffer, bebuffer::BeBuffer};
+
     use super::*;
-    use crate::{
-        be_buffer, be_buffer_add, test_helpers::BeBuffer, FontRef, GlyphId, TableProvider,
-    };
+    use crate::{FontRef, GlyphId, TableProvider};
 
     #[test]
     fn map_codepoints() {
@@ -571,6 +651,7 @@ mod tests {
         let cmap = font.cmap().unwrap();
         let mut unicodes = IntSet::empty();
         unicodes.insert(0x4e08_u32);
+        unicodes.insert(0xe0100_u32);
 
         let mut glyph_set = IntSet::empty();
         glyph_set.insert(GlyphId::new(18));
@@ -671,7 +752,7 @@ mod tests {
     #[test]
     fn cmap12_iter_avoid_overflow() {
         let data = cmap12_overflow_data();
-        let cmap12 = Cmap12::read(data.font_data()).unwrap();
+        let cmap12 = Cmap12::read(data.data().into()).unwrap();
         let _ = cmap12.iter().count();
     }
 
@@ -690,14 +771,59 @@ mod tests {
             // groups: [startCode, endCode, startGlyphID]
             [170u32, 1330926671, 328960] // group 0
         };
-        let cmap12 = Cmap12::read(cmap12_data.font_data()).unwrap();
-        assert!(cmap12.iter().count() <= char::MAX as usize + 1);
+        let cmap12 = Cmap12::read(cmap12_data.data().into()).unwrap();
+        assert!(
+            cmap12.iter_with_limits(Cmap12IterLimits::default()).count() <= char::MAX as usize + 1
+        );
+    }
+
+    // oss-fuzz: timeout in outlines, caused by cmap 12 iter
+    // ref: <https://issues.oss-fuzz.com/issues/394638728>
+    #[test]
+    fn cmap12_iter_avoid_timeout2() {
+        let cmap12_data = be_buffer! {
+            12u16,      // format
+            0u16,       // reserved, set to 0
+            0u32,       // length, ignored
+            0u32,       // language, ignored
+            3u32,       // numGroups
+            // groups: [startCode, endCode, startGlyphID]
+            [199u32, 16777271, 2],
+            [262u32, 262, 3],
+            [268u32, 268, 4]
+        };
+        let cmap12 = Cmap12::read(cmap12_data.data().into()).unwrap();
+        // In the test case, maxp.numGlyphs = 8
+        const MAX_GLYPHS: u32 = 8;
+        let limits = Cmap12IterLimits {
+            glyph_count: MAX_GLYPHS,
+            ..Default::default()
+        };
+        assert_eq!(cmap12.iter_with_limits(limits).count(), MAX_GLYPHS as usize);
+    }
+
+    #[test]
+    fn cmap12_iter_glyph_limit() {
+        let font = FontRef::new(font_test_data::CMAP12_FONT1).unwrap();
+        let cmap12 = find_cmap12(&font.cmap().unwrap()).unwrap();
+        let mut limits = Cmap12IterLimits::default_for_font(&font);
+        // Ensure we obey the glyph count limit.
+        // This font has 11 glyphs
+        for glyph_count in 0..=11 {
+            limits.glyph_count = glyph_count;
+            assert_eq!(
+                cmap12.iter_with_limits(limits).count(),
+                // We always return one less than glyph count limit because
+                // notdef is not mapped
+                (glyph_count as usize).saturating_sub(1)
+            );
+        }
     }
 
     #[test]
     fn cmap12_iter_range_clamping() {
         let data = cmap12_overflow_data();
-        let cmap12 = Cmap12::read(data.font_data()).unwrap();
+        let cmap12 = Cmap12::read(data.data().into()).unwrap();
         let ranges = cmap12
             .groups()
             .iter()
@@ -706,7 +832,11 @@ mod tests {
         // These groups overlap and extend to the whole u32 range
         assert_eq!(ranges, &[(0, 16777215), (255, u32::MAX)]);
         // But we produce at most char::MAX + 1 results
-        assert!(cmap12.iter().count() <= char::MAX as usize + 1);
+        let limits = Cmap12IterLimits {
+            glyph_count: u32::MAX,
+            ..Default::default()
+        };
+        assert!(cmap12.iter_with_limits(limits).count() <= char::MAX as usize + 1);
     }
 
     #[test]

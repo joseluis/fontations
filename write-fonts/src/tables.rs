@@ -7,6 +7,7 @@ pub mod avar;
 pub mod base;
 pub mod cmap;
 pub mod fvar;
+pub mod gasp;
 pub mod gdef;
 pub mod glyf;
 pub mod gpos;
@@ -16,10 +17,10 @@ pub mod head;
 pub mod hhea;
 pub mod hmtx;
 pub mod hvar;
-pub mod ift;
 pub mod layout;
 pub mod loca;
 pub mod maxp;
+pub mod meta;
 pub mod mvar;
 pub mod name;
 pub mod os2;
@@ -29,6 +30,9 @@ pub mod stat;
 pub mod variations;
 pub mod vhea;
 pub mod vmtx;
+
+#[cfg(feature = "ift")]
+pub mod ift;
 
 // ensure that all of our types implement the serde traits
 #[cfg(feature = "serde")]
@@ -40,6 +44,7 @@ fn do_we_even_serde() {
         base: base::Base,
         cmap: cmap::Cmap,
         fvar: fvar::Fvar,
+        gasp: gasp::Gasp,
         gdef: gdef::Gdef,
         glyf: glyf::Glyf,
         gpos: gpos::Gpos,
@@ -51,6 +56,7 @@ fn do_we_even_serde() {
         hvar: hvar::Hvar,
         loca: loca::Loca,
         maxp: maxp::Maxp,
+        meta: meta::Meta,
         name: name::Name,
         os2: os2::Os2,
         post: post::Post,

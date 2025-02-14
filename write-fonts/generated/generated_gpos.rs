@@ -88,6 +88,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::Gpos<'a>> for Gpos {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::Gpos<'a>> for Gpos {}
 
 impl<'a> FontRead<'a> for Gpos {
@@ -410,6 +411,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::AnchorFormat1<'a>> for AnchorForma
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::AnchorFormat1<'a>> for AnchorFormat1 {}
 
 impl<'a> FontRead<'a> for AnchorFormat1 {
@@ -469,6 +471,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::AnchorFormat2<'a>> for AnchorForma
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::AnchorFormat2<'a>> for AnchorFormat2 {}
 
 impl<'a> FontRead<'a> for AnchorFormat2 {
@@ -551,6 +554,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::AnchorFormat3<'a>> for AnchorForma
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::AnchorFormat3<'a>> for AnchorFormat3 {}
 
 impl<'a> FontRead<'a> for AnchorFormat3 {
@@ -581,7 +585,7 @@ impl MarkArray {
 impl FontWrite for MarkArray {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.mark_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.mark_records)).unwrap()).write_into(writer);
         self.mark_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -611,6 +615,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::MarkArray<'a>> for MarkArray {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::MarkArray<'a>> for MarkArray {}
 
 impl<'a> FontRead<'a> for MarkArray {
@@ -802,6 +807,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::SinglePosFormat1<'a>> for SinglePo
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::SinglePosFormat1<'a>> for SinglePosFormat1 {}
 
 impl<'a> FontRead<'a> for SinglePosFormat1 {
@@ -837,7 +843,7 @@ impl FontWrite for SinglePosFormat2 {
         (2 as u16).write_into(writer);
         self.coverage.write_into(writer);
         (self.compute_value_format() as ValueFormat).write_into(writer);
-        (array_len(&self.value_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.value_records)).unwrap()).write_into(writer);
         self.value_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -875,6 +881,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::SinglePosFormat2<'a>> for SinglePo
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::SinglePosFormat2<'a>> for SinglePosFormat2 {}
 
 impl<'a> FontRead<'a> for SinglePosFormat2 {
@@ -1002,7 +1009,7 @@ impl FontWrite for PairPosFormat1 {
         self.coverage.write_into(writer);
         (self.compute_value_format1() as ValueFormat).write_into(writer);
         (self.compute_value_format2() as ValueFormat).write_into(writer);
-        (array_len(&self.pair_sets).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.pair_sets)).unwrap()).write_into(writer);
         self.pair_sets.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -1035,6 +1042,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::PairPosFormat1<'a>> for PairPosFor
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::PairPosFormat1<'a>> for PairPosFormat1 {}
 
 impl<'a> FontRead<'a> for PairPosFormat1 {
@@ -1063,7 +1071,7 @@ impl PairSet {
 impl FontWrite for PairSet {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.pair_value_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.pair_value_records)).unwrap()).write_into(writer);
         self.pair_value_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -1097,6 +1105,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::PairSet<'a>> for PairSet {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::PairSet<'a>> for PairSet {}
 
 /// Part of [PairSet]
@@ -1245,6 +1254,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::PairPosFormat2<'a>> for PairPosFor
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::PairPosFormat2<'a>> for PairPosFormat2 {}
 
 impl<'a> FontRead<'a> for PairPosFormat2 {
@@ -1371,7 +1381,7 @@ impl FontWrite for CursivePosFormat1 {
     fn write_into(&self, writer: &mut TableWriter) {
         (1 as u16).write_into(writer);
         self.coverage.write_into(writer);
-        (array_len(&self.entry_exit_record).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.entry_exit_record)).unwrap()).write_into(writer);
         self.entry_exit_record.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -1405,6 +1415,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::CursivePosFormat1<'a>> for Cursive
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::CursivePosFormat1<'a>> for CursivePosFormat1 {}
 
 impl<'a> FontRead<'a> for CursivePosFormat1 {
@@ -1551,6 +1562,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::MarkBasePosFormat1<'a>> for MarkBa
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::MarkBasePosFormat1<'a>> for MarkBasePosFormat1 {}
 
 impl<'a> FontRead<'a> for MarkBasePosFormat1 {
@@ -1578,7 +1590,7 @@ impl BaseArray {
 impl FontWrite for BaseArray {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.base_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.base_records)).unwrap()).write_into(writer);
         self.base_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -1612,6 +1624,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::BaseArray<'a>> for BaseArray {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::BaseArray<'a>> for BaseArray {}
 
 /// Part of [BaseArray]
@@ -1743,6 +1756,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::MarkLigPosFormat1<'a>> for MarkLig
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::MarkLigPosFormat1<'a>> for MarkLigPosFormat1 {}
 
 impl<'a> FontRead<'a> for MarkLigPosFormat1 {
@@ -1774,7 +1788,7 @@ impl LigatureArray {
 impl FontWrite for LigatureArray {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.ligature_attaches).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.ligature_attaches)).unwrap()).write_into(writer);
         self.ligature_attaches.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -1803,6 +1817,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::LigatureArray<'a>> for LigatureArr
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::LigatureArray<'a>> for LigatureArray {}
 
 /// Part of [MarkLigPosFormat1]
@@ -1823,7 +1838,7 @@ impl LigatureAttach {
 impl FontWrite for LigatureAttach {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.component_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.component_records)).unwrap()).write_into(writer);
         self.component_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -1857,6 +1872,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::LigatureAttach<'a>> for LigatureAt
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::LigatureAttach<'a>> for LigatureAttach {}
 
 /// Part of [MarkLigPosFormat1]
@@ -1991,6 +2007,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::MarkMarkPosFormat1<'a>> for MarkMa
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::MarkMarkPosFormat1<'a>> for MarkMarkPosFormat1 {}
 
 impl<'a> FontRead<'a> for MarkMarkPosFormat1 {
@@ -2018,7 +2035,7 @@ impl Mark2Array {
 impl FontWrite for Mark2Array {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.mark2_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.mark2_records)).unwrap()).write_into(writer);
         self.mark2_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -2052,6 +2069,7 @@ impl<'a> FromObjRef<read_fonts::tables::gpos::Mark2Array<'a>> for Mark2Array {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gpos::Mark2Array<'a>> for Mark2Array {}
 
 /// Part of [MarkMarkPosFormat1]
@@ -2153,6 +2171,7 @@ where
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a, T, U> FromTableRef<read_fonts::tables::gpos::ExtensionPosFormat1<'a, U>>
     for ExtensionPosFormat1<T>
 where

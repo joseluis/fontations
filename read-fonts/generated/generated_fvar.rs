@@ -11,33 +11,45 @@ use crate::codegen_prelude::*;
 pub struct FvarMarker {}
 
 impl FvarMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn axis_instance_arrays_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_instance_arrays_offset_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn _reserved_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved_byte_range(&self) -> Range<usize> {
         let start = self.axis_instance_arrays_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_count_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_count_byte_range(&self) -> Range<usize> {
         let start = self._reserved_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_size_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_size_byte_range(&self) -> Range<usize> {
         let start = self.axis_count_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn instance_count_byte_range(&self) -> Range<usize> {
+
+    pub fn instance_count_byte_range(&self) -> Range<usize> {
         let start = self.axis_size_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn instance_size_byte_range(&self) -> Range<usize> {
+
+    pub fn instance_size_byte_range(&self) -> Range<usize> {
         let start = self.instance_count_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for FvarMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.instance_size_byte_range().end
     }
 }
 
@@ -63,6 +75,7 @@ impl<'a> FontRead<'a> for Fvar<'a> {
 /// The [fvar (Font Variations)](https://docs.microsoft.com/en-us/typography/opentype/spec/fvar) table
 pub type Fvar<'a> = TableRef<'a, FvarMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Fvar<'a> {
     /// Major version number of the font variations table — set to 1.
     /// Minor version number of the font variations table — set to 0.
@@ -140,6 +153,7 @@ impl<'a> SomeTable<'a> for Fvar<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Fvar<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -157,13 +171,20 @@ pub struct AxisInstanceArraysMarker {
 }
 
 impl AxisInstanceArraysMarker {
-    fn axes_byte_range(&self) -> Range<usize> {
+    pub fn axes_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + self.axes_byte_len
     }
-    fn instances_byte_range(&self) -> Range<usize> {
+
+    pub fn instances_byte_range(&self) -> Range<usize> {
         let start = self.axes_byte_range().end;
         start..start + self.instances_byte_len
+    }
+}
+
+impl MinByteRange for AxisInstanceArraysMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.instances_byte_range().end
     }
 }
 
@@ -214,6 +235,7 @@ impl<'a> AxisInstanceArrays<'a> {
 /// Shim table to handle combined axis and instance arrays.
 pub type AxisInstanceArrays<'a> = TableRef<'a, AxisInstanceArraysMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> AxisInstanceArrays<'a> {
     /// Variation axis record array.
     pub fn axes(&self) -> &'a [VariationAxisRecord] {
@@ -267,6 +289,7 @@ impl<'a> SomeTable<'a> for AxisInstanceArrays<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for AxisInstanceArrays<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

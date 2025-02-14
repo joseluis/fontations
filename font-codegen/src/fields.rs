@@ -1087,7 +1087,7 @@ impl Field {
             let condition = condition.condition_tokens_for_read();
             if self.read_at_parse_time {
                 quote! {
-                    let #name = #condition.then(|| cursor.read::<#typ>()).transpose()?.unwrap_or(0);
+                    let #name = #condition.then(|| cursor.read::<#typ>()).transpose()?.unwrap_or_default();
                 }
             } else {
                 quote! {
@@ -1304,7 +1304,7 @@ impl Field {
                     let typ = self.typ.cooked_type_tokens();
                     let expr = inline_expr.compile_expr();
                     if !inline_expr.referenced_fields.is_empty() {
-                        quote!(#expr.unwrap() as #typ)
+                        quote!( #typ :: try_from(#expr).unwrap() )
                     } else {
                         quote!(#expr as #typ)
                     }

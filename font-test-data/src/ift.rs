@@ -3,12 +3,9 @@
 //! Used for incremental font transfer. Specification:
 //! <https://w3c.github.io/IFT/Overview.html>
 
-use read_fonts::types::Tag;
-use read_fonts::{be_buffer, be_buffer_add, test_helpers::BeBuffer, types::Int24, types::Uint24};
-use write_fonts::{
-    tables::{head::Head, loca::Loca, maxp::Maxp},
-    FontBuilder,
-};
+use font_types::{Int24, Tag, Uint24};
+
+use crate::{be_buffer, bebuffer::BeBuffer};
 
 pub static IFT_BASE: &[u8] = include_bytes!("../test_data/ttf/ift_base.ttf");
 
@@ -31,7 +28,7 @@ pub fn simple_format1() -> BeBuffer {
         {b'B': "uri_template[1]"},
         [b'C', b'D', b'E', b'F', 0xc9, 0xa4], // uri_template[2..7]
 
-        {3u8: "patch_encoding"}, // = glyph keyed
+        {3u8: "patch_format"}, // = glyph keyed
 
         /* ### Glyph Map ### */
         {1u16: "glyph_map"},     // first mapped glyph
@@ -60,8 +57,9 @@ pub fn u16_entries_format1() -> BeBuffer {
       {0u32: "feature_map_offset"},
 
       // applied entry bitmap (38 bytes)
+      {0u8: "applied_entry_bitmap"},
       [
-        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0,
@@ -104,13 +102,18 @@ pub fn feature_map_format1() -> BeBuffer {
       {0u32: "glyph_map_offset"},
       {0u32: "feature_map_offset"},
 
-      // applied entry bitmap (51 bytes) - 300 is applied
+      // applied entry bitmap (51 bytes) - 299 is applied
+      {0u8: "applied_entries"},
       [
-        0, 0, 0, 0, 0, 0, 0, 0,           // [0, 64)
+        0, 0, 0, 0, 0, 0, 0,           // [0, 64)
         0, 0, 0, 0, 0, 0, 0, 0,           // [64, 128)
         0, 0, 0, 0, 0, 0, 0, 0,           // [128, 192)
         0, 0, 0, 0, 0, 0, 0, 0,           // [192, 256)
-        0, 0, 0, 0, 0, 0b00001000, 0, 0,  // [256, 320)
+        0, 0, 0, 0, 0u8
+      ],
+      {0b00001000u8: "applied_entries_296"},
+      [
+        0, 0,  // [256, 320)
         0, 0, 0, 0, 0, 0, 0, 0,           // [320, 384)
         0, 0, 0u8                         // [384, 400)
       ],
@@ -118,19 +121,19 @@ pub fn feature_map_format1() -> BeBuffer {
       8u16, // uriTemplateLength
       [b'A', b'B', b'C', b'D', b'E', b'F', 0xc9, 0xa4],  // uriTemplate[8]
 
-      3u8,                    // patch encoding = glyph keyed
+      {3u8: "patch_format"},            // patch encoding = glyph keyed
 
       /* ### Glyph Map ### */
       {2u16: "glyph_map"}, // first mapped glyph
 
       // entryIndex[2..6]
       [
-        80,  // gid 2
-        81,  // gid 3
-        300, // gid 4
-        299, // gid 5
-        80u16   // gid 6
+        80,     // gid 2
+        81,     // gid 3
+        300u16  // gid 4
       ],
+      {299u16: "gid5_entry"},  // gid 5
+      {80u16:  "gid6_entry"},  // gid 6
 
       // ## Feature Map ##
       {3u16: "feature_map"}, // feature count
@@ -183,7 +186,10 @@ pub fn codepoints_only_format2() -> BeBuffer {
 
       0u32,               // reserved
 
-      [1, 2, 3, 4u32],    // compat id
+      {1u32: "compat_id[0]"},
+      {2u32: "compat_id[1]"},
+      {3u32: "compat_id[2]"},
+      {4u32: "compat_id[3]"},
 
       3u8,                // default patch encoding
       (Uint24::new(4)),   // entry count
@@ -195,26 +201,26 @@ pub fn codepoints_only_format2() -> BeBuffer {
 
       /* ### Entries Array ### */
       // Entry id = 1
-      {0b00010000u8: "entries"},              // format = CODEPOINT_BIT_1
+      {0b00010000u8: "entries[0]"},           // format = CODEPOINT_BIT_1
       [0b00001101, 0b00000011, 0b00110001u8], // codepoints = [0..17]
 
       // Entry id = 2
-      0b01100000u8,                           // format = IGNORED | CODEPOINT_BIT_2
+      {0b01100000u8: "entries[1]"},           // format = IGNORED | CODEPOINT_BIT_2
       5u16,                                   // bias
       [0b00001101, 0b00000011, 0b00110001u8], // codepoints = [5..22]
 
       // Entry id = 3
-      0b00100000u8,                           // format = CODEPOINT_BIT_2
-      5u16,                                   // bias
+      {0b00100000u8: "entries[2]"},            // format = CODEPOINT_BIT_2
+      5u16,                                    // bias
       [0b00001101, 0b00000011, 0b00110001u8],  // codepoints = [5..22]
 
       // Entry id = 4
-      0b00110000u8,                           // format = CODEPOINT_BIT_1 | CODEPOINT_BIT_2
-      (Uint24::new(80_000)),                  // bias
-      [0b00001101, 0b00000011, 0b00110001u8]  // codepoints = [80_005..80_022]
+      {0b00110000u8: "entries[3]"},            // format = CODEPOINT_BIT_1 | CODEPOINT_BIT_2
+      (Uint24::new(80_000)),                   // bias
+      [0b00001101, 0b00000011, 0b00110001u8]   // codepoints = [80_005..80_022]
     };
 
-    let offset = buffer.offset_for("entries") as u32;
+    let offset = buffer.offset_for("entries[0]") as u32;
     buffer.write_at("entries_offset", offset);
 
     buffer
@@ -228,7 +234,7 @@ pub fn features_and_design_space_format2() -> BeBuffer {
 
       [1, 2, 3, 4u32], // compat id
 
-      3u8, // default patch encoding
+      {3u8: "patch_format"}, // default patch encoding
       (Uint24::new(3)), // entry count
       {0u32: "entries_offset"},
       0u32, // entry id string data offset
@@ -238,7 +244,7 @@ pub fn features_and_design_space_format2() -> BeBuffer {
 
       /* ### Entries Array ### */
       // Entry id = 1
-      {0b00010001u8: "entries"},          // format = CODEPOINT_BIT_1 | FEATURES_AND_DESIGN_SPACE
+      {0b00010001u8: "entries[0]"},          // format = CODEPOINT_BIT_1 | FEATURES_AND_DESIGN_SPACE
 
       2u8,                                // feature count = 2
       (Tag::new(b"liga")),                // feature[0] = liga
@@ -251,9 +257,8 @@ pub fn features_and_design_space_format2() -> BeBuffer {
 
       [0b00001101, 0b00000011, 0b00110001u8], // codepoints = [0..17]
 
-      // Entries Array
       // Entry id = 2
-      0b00010001u8,                       // format = CODEPOINT_BIT_1 | FEATURES_AND_DESIGN_SPACE
+      {0b00010001u8: "entries[1]"},       // format = CODEPOINT_BIT_1 | FEATURES_AND_DESIGN_SPACE
 
       1u8,                                // feature count
       (Tag::new(b"rlig")),                // feature[0]
@@ -263,7 +268,7 @@ pub fn features_and_design_space_format2() -> BeBuffer {
       [0b00001101, 0b00000011, 0b00110001u8], // codepoints = [0..17]
 
       // Entry id = 3
-      0b000100001u8,                      // format = CODEPOINT_BIT_2 | FEATURES_AND_DESIGN_SPACE
+      {0b000100001u8: "entries[2]"},      // format = CODEPOINT_BIT_2 | FEATURES_AND_DESIGN_SPACE
 
       1u8,                                // feature count = 1
       (Tag::new(b"smcp")),                // feature[0] = smcp
@@ -274,24 +279,24 @@ pub fn features_and_design_space_format2() -> BeBuffer {
       0x02BC_0000u32,                     // end = 700
 
       (Tag::new(b"wdth")),                // tag = wdth
-      0x0u32,                             // start = 0
-      0x8000,                             // end = 0
+      0x0u32,                             // start = 0.0
+      0x8000u32,                          // end = 0.5
 
       (Tag::new(b"wdth")),                // tag = wdth
-      0x0002_0000,                        // start = 2.0
-      0x0002_8000,                        // end = 2.5
+      0x0002_0000u32,                     // start = 2.0
+      0x0002_8000u32,                     // end = 2.5
 
       5u16,                               // bias = 5
-      0b00001101, 0b00000011, 0b00110001  // codepoints = [5..22]
+      [0b00001101, 0b00000011, 0b00110001u8] // codepoints = [5..22]
     };
 
-    let offset = buffer.offset_for("entries") as u32;
+    let offset = buffer.offset_for("entries[0]") as u32;
     buffer.write_at("entries_offset", offset);
 
     buffer
 }
 
-pub fn copy_indices_format2() -> BeBuffer {
+pub fn child_indices_format2() -> BeBuffer {
     let mut buffer = be_buffer! {
       2u8,                      // format
 
@@ -310,17 +315,17 @@ pub fn copy_indices_format2() -> BeBuffer {
       // Entries Array
 
       // Entry id = 1
-      {0b01100000u8: "entries"},              // format = CODEPOINT_BIT_2 | IGNORED
+      {0b01100000u8: "entries[0]"},           // format = CODEPOINT_BIT_2 | IGNORED
       5u16,                                   // bias = 5
       [0b00001101, 0b00000011, 0b00110001u8], // codepoints = [5..22]
 
       // Entry id = 2
-      0b00100000u8,                           // format = CODEPOINT_BIT_2
+      {0b00100000u8: "entries[1]"},           // format = CODEPOINT_BIT_2
       50u16,                                  // bias
       [0b00001101, 0b00000011, 0b00110001u8], // codepoints = [50..67]
 
       // Entry id = 3
-      0b00000001u8,                           // format = FEATURES_AND_DESIGN_SPACE
+      {0b00000001u8: "entries[2]"},           // format = FEATURES_AND_DESIGN_SPACE
 
       1u8,                                    // feature count = 1
       (Tag::new(b"rlig")),                    // feature[0] = rlig
@@ -331,7 +336,7 @@ pub fn copy_indices_format2() -> BeBuffer {
       0x02BC_0000u32,                         // end = 700
 
       // Entry id = 4
-      0b00000001u8,                           // format = FEATURES_AND_DESIGN_SPACE
+      {0b00000001u8: "entries[3]"},           // format = FEATURES_AND_DESIGN_SPACE
 
       1u8,                                    // feature count
       (Tag::new(b"liga")),                    // feature[0] = liga
@@ -342,38 +347,38 @@ pub fn copy_indices_format2() -> BeBuffer {
       0x0064_0000,                            // end = 100
 
       // Entry id = 5
-      0b00000010u8,                           // format = COPY_INDICES
-      1u8,                                    // copy count
-      (Uint24::new(0)),                       // copy
+      {0b00000010u8: "entries[4]"},           // format = CHILD_INDICES
+      1u8,                                    // child count
+      (Uint24::new(0)),                       // child[0] = 0
 
       // Entry id = 6
-      0b00000010u8,                           // format = COPY_INDICES
-      1u8,                                    // copy count
-      (Uint24::new(2)),                       // copy
+      {0b00000010u8: "entries[5]"},           // format = CHILD_INDICES
+      1u8,                                    // child count
+      (Uint24::new(2)),                       // child
 
       // Entry id = 7
-      0b00000010u8,                           // format = COPY_INDICES
-      4u8,                                    // copy count
-      (Uint24::new(3)),                       // copy[0]
-      (Uint24::new(2)),                       // copy[1]
-      (Uint24::new(1)),                       // copy[2]
-      (Uint24::new(0)),                       // copy[3]
+      {0b00000010u8: "entries[6]"},           // format = CHILD_INDICES
+      {4u8: "entries[6]_child_count"},        // child count
+      (Uint24::new(3)),                       // child[0] = 3
+      {(Uint24::new(2)): "entries[6]_child"}, // child[1] = 2
+      (Uint24::new(1)),                       // child[2] = 1
+      (Uint24::new(0)),                       // child[3] = 0
 
       // Entry id = 8
-      0b00000010u8,                           // format = COPY_INDICES
-      2u8,                                    // copy count
-      (Uint24::new(4)),                       // copy[0]
-      (Uint24::new(5)),                       // copy[1]
+      {0b00000010u8: "entries[7]"},           // format = CHILD_INDICES
+      2u8,                                    // child count
+      (Uint24::new(4)),                       // child[0] = 4
+      (Uint24::new(5)),                       // child[1] = 5
 
       // Entry id = 9
-      0b00100010u8,                           // format = CODEPOINT_BIT_2 | COPY_INDICES
-      1u8,                                    // copy count
-      (Uint24::new(0)),                       // copy[0]
+      {0b00100010u8: "entries[8]"},           // format = CODEPOINT_BIT_2 | CHILD_INDICES
+      1u8,                                    // child count
+      (Uint24::new(0)),                       // chil[0] = 0
       100u16,                                 // bias
       [0b00001101, 0b00000011, 0b00110001u8]  // codepoints = [100..117]
     };
 
-    let offset = buffer.offset_for("entries") as u32;
+    let offset = buffer.offset_for("entries[0]") as u32;
     buffer.write_at("entries_offset", offset);
 
     buffer
@@ -398,28 +403,28 @@ pub fn custom_ids_format2() -> BeBuffer {
 
       // Entries Array
       // Entry id = 0
-      {0b00010100u8: "entries"},              // format = CODEPOINT_BIT_1 | ID_DELTA
+      {0b00010100u8: "entries[0]"},           // format = CODEPOINT_BIT_1 | ID_DELTA
       (Int24::new(-1)),                       // id delta
       [0b00001101, 0b00000011, 0b00110001u8], // codepoints = [0..17]
 
       // Entry id = 6
-      0b00100100u8,                           // format = CODEPOINT_BIT_2 | ID_DELTA
-      {(Int24::new(5)): "id delta"},            // id delta
+      {0b00100100u8: "entries[1]"},            // format = CODEPOINT_BIT_2 | ID_DELTA
+      {(Int24::new(5)): "id delta"},           // id delta
       5u16,                                   // bias
       [0b00001101, 0b00000011, 0b00110001u8], // codepoints = [5..22]
 
       // Entry id = 14
-      0b01000100u8,                           // format = ID_DELTA | IGNORED
+      {0b01000100u8: "entries[2]"},                  // format = ID_DELTA | IGNORED
       {(Int24::new(7)): "id delta - ignored entry"}, // id delta
 
       // Entry id = 15
-      0b00101000u8,                           // format = CODEPOINT_BIT_2 | PATCH_ENCODING
+      {0b00101000u8: "entries[3]"},           // format = CODEPOINT_BIT_2 | PATCH_FORMAT
       {3u8: "entry[4] encoding"},             // patch encoding = Glyph Keyed
       10u16,                                  // bias
       [0b00001101, 0b00000011, 0b00110001u8]  // codepoints = [10..27]
     };
 
-    let offset = buffer.offset_for("entries") as u32;
+    let offset = buffer.offset_for("entries[0]") as u32;
     buffer.write_at("entries_offset", offset);
 
     buffer
@@ -480,12 +485,48 @@ pub fn string_ids_format2() -> BeBuffer {
     buffer
 }
 
+// Format specification: https://w3c.github.io/IFT/Overview.html#patch-map-format-2
+pub fn table_keyed_format2() -> BeBuffer {
+    let mut buffer = be_buffer! {
+      2u8,                // format
+
+      0u32,               // reserved
+
+      {1u32: "compat_id[0]"},
+      {2u32: "compat_id[1]"},
+      {3u32: "compat_id[2]"},
+      {4u32: "compat_id[3]"},
+
+      {1u8: "encoding"},  // default patch encoding
+      (Uint24::new(1)),   // entry count
+      {0u32: "entries_offset"},
+      0u32,               // entry string data offset
+
+      8u16, // uriTemplateLength
+      [b'f', b'o', b'o', b'/', b'{', b'i'],
+      {b'd': "uri_template_var_end"},
+      b'}', // uriTemplate[8]
+
+      /* ### Entries Array ### */
+      // Entry id = 1
+      {0b00010100u8: "entries"},              // format = CODEPOINT_BIT_1
+      {(Int24::new(0)): "id_delta"},
+      [0b00001101, 0b00000011, 0b00110001u8] // codepoints = [0..17]
+    };
+
+    let offset = buffer.offset_for("entries") as u32;
+    buffer.write_at("entries_offset", offset);
+
+    buffer
+}
+
 // Format specification: https://w3c.github.io/IFT/Overview.html#table-keyed
 pub fn table_keyed_patch() -> BeBuffer {
     let mut buffer = be_buffer! {
         {(Tag::new(b"iftk")): "tag"},
         0u32,                 // reserved
-        [1, 2, 3, 4u32],       // compat id
+        {1u32: "compat_id"},
+        [2, 3, 4u32],       // compat id
         3u16,                 // patch count
 
         // patch_offsets[3]
@@ -544,68 +585,14 @@ pub fn noop_table_keyed_patch() -> BeBuffer {
     }
 }
 
-pub fn test_font_for_patching() -> Vec<u8> {
-    let mut font_builder = FontBuilder::new();
-
-    let maxp = Maxp {
-        num_glyphs: 15,
-        ..Default::default()
-    };
-    font_builder.add_table(&maxp).unwrap();
-
-    let head = Head {
-        index_to_loc_format: 0,
-        ..Default::default()
-    };
-    font_builder.add_table(&head).unwrap();
-
-    // ## glyf ##
-    // glyphs are padded to even number of bytes since loca format will be short.
-    let glyf = BeBuffer::new()
-        .push_with_tag(1u8, "gid_0")
-        .extend([2, 3, 4, 5u8, 0u8])
-        .push_with_tag(6u8, "gid_1")
-        .extend([7, 8u8, 0u8])
-        .push_with_tag(9u8, "gid_8")
-        .extend([10, 11, 12u8]);
-
-    // ## loca ##
-    let gid_1 = glyf.offset_for("gid_1") as u32;
-    let gid_8 = glyf.offset_for("gid_8") as u32;
-    let end = gid_8 + 4;
-    let loca = Loca::new(vec![
-        0,     // gid 0
-        gid_1, // gid 1
-        gid_8, // gid 2
-        gid_8, // gid 3
-        gid_8, // gid 4
-        gid_8, // gid 5
-        gid_8, // gid 6
-        gid_8, // gid 7
-        gid_8, // gid 8
-        end,   // gid 9
-        end,   // gid 10
-        end,   // gid 11
-        end,   // gid 12
-        end,   // gid 13
-        end,   // gid 14
-        end,   // end
-    ]);
-
-    let glyf: &[u8] = &glyf;
-    font_builder.add_raw(Tag::new(b"glyf"), glyf);
-    font_builder.add_table(&loca).unwrap();
-
-    font_builder.build()
-}
-
 // Format specification: https://w3c.github.io/IFT/Overview.html#glyph-keyed
 pub fn glyph_keyed_patch_header() -> BeBuffer {
     be_buffer! {
-      (Tag::new(b"ifgk")), // format
+      {(Tag::new(b"ifgk")): "format"}, // format
       0u32,                // reserved
       0u8,                 // flags (0 = u16 gids)
-      [6, 7, 8, 9u32],     // compatibility id
+      {6u32: "compatibility_id"},
+      [7, 8, 9u32],     // compatibility id
       {0u32: "max_uncompressed_length"}
     }
 }
@@ -632,7 +619,8 @@ pub fn glyf_u16_glyph_patches() -> BeBuffer {
       // glyph ids * 5
       [2, 7u16],
       {8u16: "gid_8"},
-      [9, 13u16],
+      [9u16],
+      {13u16: "gid_13"},
 
       (Tag::new(b"glyf")),   // tables * 1
 
@@ -774,8 +762,8 @@ pub fn glyf_and_gvar_u16_glyph_patches() -> BeBuffer {
       3u32,       // glyph count
       2u8,        // table count
       [2, 7, 8u16],   // glyph ids * 3
-      (Tag::new(b"glyf")),   // tables[0]
-      (Tag::new(b"gvar")),   // tables[1]
+      {(Tag::new(b"glyf")): "glyf_tag"}, // tables[0]
+      {(Tag::new(b"gvar")): "gvar_tag"}, // tables[1]
 
       // glyph data offsets * 7
       {0u32: "glyf_gid_2_offset"},
@@ -819,6 +807,288 @@ pub fn glyf_and_gvar_u16_glyph_patches() -> BeBuffer {
     let offset = buffer.offset_for("gvar_gid_8_data") as u32;
     buffer.write_at("gvar_gid_8_offset", offset);
     buffer.write_at("end_offset", offset + 1);
+
+    buffer
+}
+
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/gvar>
+pub fn short_gvar_with_shared_tuples() -> BeBuffer {
+    // This gvar has the correct header and tuple structure but the per glyph variation data is not valid.
+    // Meant for testing with IFT glyph keyed patching which treats the per glyph data as opaque blobs.
+    let mut buffer = be_buffer! {
+      // HEADER
+      1u16, // major version
+      0u16, // minor version
+      1u16, // axis count
+      3u16, // sharedTupleCount
+      {0u32: "shared_tuples_offset"},
+      15u16, // glyph count
+      0u16,  // flags
+      {0u32: "glyph_variation_data_offset"},
+
+      // OFFSETS
+      {0u16: "glyph_offset[0]"},
+      {0u16: "glyph_offset[1]"},
+      {0u16: "glyph_offset[2]"},
+      {0u16: "glyph_offset[3]"},
+      {0u16: "glyph_offset[4]"},
+      {0u16: "glyph_offset[5]"},
+      {0u16: "glyph_offset[6]"},
+      {0u16: "glyph_offset[7]"},
+      {0u16: "glyph_offset[8]"},
+      {0u16: "glyph_offset[9]"},
+      {0u16: "glyph_offset[10]"},
+      {0u16: "glyph_offset[11]"},
+      {0u16: "glyph_offset[12]"},
+      {0u16: "glyph_offset[13]"},
+      {0u16: "glyph_offset[14]"},
+      {0u16: "glyph_offset[15]"},
+
+      // SHARED TUPLES
+      {42u16: "sharedTuples[0]"},
+      13u16,
+      25u16,
+
+      // GLYPH VARIATION DATA
+      {1u8: "glyph_0"}, [2, 3, 4u8],
+      {5u8: "glyph_8"}, [6, 7, 8, 9u8], {10u8: "end"}
+    };
+
+    let offset = buffer.offset_for("sharedTuples[0]") as u32;
+    buffer.write_at("shared_tuples_offset", offset);
+
+    let data_offset = buffer.offset_for("glyph_0");
+    buffer.write_at("glyph_variation_data_offset", data_offset as u32);
+
+    let glyph0_offset = ((buffer.offset_for("glyph_0") - data_offset) / 2) as u16;
+    let glyph8_offset = ((buffer.offset_for("glyph_8") - data_offset) / 2) as u16;
+    let end_offset = ((buffer.offset_for("end") + 1 - data_offset) / 2) as u16;
+
+    buffer.write_at("glyph_offset[0]", glyph0_offset);
+    buffer.write_at("glyph_offset[1]", glyph8_offset);
+    buffer.write_at("glyph_offset[2]", glyph8_offset);
+    buffer.write_at("glyph_offset[3]", glyph8_offset);
+    buffer.write_at("glyph_offset[4]", glyph8_offset);
+    buffer.write_at("glyph_offset[5]", glyph8_offset);
+    buffer.write_at("glyph_offset[6]", glyph8_offset);
+    buffer.write_at("glyph_offset[7]", glyph8_offset);
+    buffer.write_at("glyph_offset[8]", glyph8_offset);
+    buffer.write_at("glyph_offset[9]", end_offset);
+    buffer.write_at("glyph_offset[10]", end_offset);
+    buffer.write_at("glyph_offset[11]", end_offset);
+    buffer.write_at("glyph_offset[12]", end_offset);
+    buffer.write_at("glyph_offset[13]", end_offset);
+    buffer.write_at("glyph_offset[14]", end_offset);
+    buffer.write_at("glyph_offset[15]", end_offset);
+
+    buffer
+}
+
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/gvar>
+pub fn long_gvar_with_shared_tuples() -> BeBuffer {
+    // This gvar has the correct header and tuple structure but the per glyph variation data is not valid.
+    // Meant for testing with IFT glyph keyed patching which treats the per glyph data as opaque blobs.
+    let mut buffer = be_buffer! {
+      // HEADER
+      1u16, // major version
+      0u16, // minor version
+      1u16, // axis count
+      3u16, // sharedTupleCount
+      {0u32: "shared_tuples_offset"},
+      15u16, // glyph count
+      0b00000000_00000001u16,  // flags
+      {0u32: "glyph_variation_data_offset"},
+
+      // OFFSETS
+      {0u32: "glyph_offset[0]"},
+      {0u32: "glyph_offset[1]"},
+      {0u32: "glyph_offset[2]"},
+      {0u32: "glyph_offset[3]"},
+      {0u32: "glyph_offset[4]"},
+      {0u32: "glyph_offset[5]"},
+      {0u32: "glyph_offset[6]"},
+      {0u32: "glyph_offset[7]"},
+      {0u32: "glyph_offset[8]"},
+      {0u32: "glyph_offset[9]"},
+      {0u32: "glyph_offset[10]"},
+      {0u32: "glyph_offset[11]"},
+      {0u32: "glyph_offset[12]"},
+      {0u32: "glyph_offset[13]"},
+      {0u32: "glyph_offset[14]"},
+      {0u32: "glyph_offset[15]"},
+
+      // SHARED TUPLES
+      {42u16: "sharedTuples[0]"},
+      13u16,
+      25u16,
+
+      // GLYPH VARIATION DATA
+      {1u8: "glyph_0"}, [2, 3, 4u8],
+      {5u8: "glyph_8"}, [6, 7, 8, 9u8], {10u8: "end"}
+    };
+
+    let offset = buffer.offset_for("sharedTuples[0]") as u32;
+    buffer.write_at("shared_tuples_offset", offset);
+
+    let data_offset = buffer.offset_for("glyph_0");
+    buffer.write_at("glyph_variation_data_offset", data_offset as u32);
+
+    let glyph0_offset = (buffer.offset_for("glyph_0") - data_offset) as u32;
+    let glyph8_offset = (buffer.offset_for("glyph_8") - data_offset) as u32;
+    let end_offset = (buffer.offset_for("end") + 1 - data_offset) as u32;
+
+    buffer.write_at("glyph_offset[0]", glyph0_offset);
+    buffer.write_at("glyph_offset[1]", glyph8_offset);
+    buffer.write_at("glyph_offset[2]", glyph8_offset);
+    buffer.write_at("glyph_offset[3]", glyph8_offset);
+    buffer.write_at("glyph_offset[4]", glyph8_offset);
+    buffer.write_at("glyph_offset[5]", glyph8_offset);
+    buffer.write_at("glyph_offset[6]", glyph8_offset);
+    buffer.write_at("glyph_offset[7]", glyph8_offset);
+    buffer.write_at("glyph_offset[8]", glyph8_offset);
+    buffer.write_at("glyph_offset[9]", end_offset);
+    buffer.write_at("glyph_offset[10]", end_offset);
+    buffer.write_at("glyph_offset[11]", end_offset);
+    buffer.write_at("glyph_offset[12]", end_offset);
+    buffer.write_at("glyph_offset[13]", end_offset);
+    buffer.write_at("glyph_offset[14]", end_offset);
+    buffer.write_at("glyph_offset[15]", end_offset);
+
+    buffer
+}
+
+pub fn short_gvar_with_no_shared_tuples() -> BeBuffer {
+    // This gvar has the correct header and tuple structure but the per glyph variation data is not valid.
+    // Meant for testing with IFT glyph keyed patching which treats the per glyph data as opaque blobs.
+    let mut buffer = be_buffer! {
+      // HEADER
+      1u16,  // major version
+      0u16,  // minor version
+      1u16,  // axis count
+      {0u16: "shared_tuple_count"},
+      {0u32: "shared_tuples_offset"},
+      15u16, // glyph count
+      0u16,  // flags
+      {0u32: "glyph_variation_data_offset"},
+
+      // OFFSETS
+      {0u16: "glyph_offset[0]"},
+      {0u16: "glyph_offset[1]"},
+      {0u16: "glyph_offset[2]"},
+      {0u16: "glyph_offset[3]"},
+      {0u16: "glyph_offset[4]"},
+      {0u16: "glyph_offset[5]"},
+      {0u16: "glyph_offset[6]"},
+      {0u16: "glyph_offset[7]"},
+      {0u16: "glyph_offset[8]"},
+      {0u16: "glyph_offset[9]"},
+      {0u16: "glyph_offset[10]"},
+      {0u16: "glyph_offset[11]"},
+      {0u16: "glyph_offset[12]"},
+      {0u16: "glyph_offset[13]"},
+      {0u16: "glyph_offset[14]"},
+      {0u16: "glyph_offset[15]"},
+
+      // GLYPH VARIATION DATA
+      {1u8: "glyph_0"}, [2, 3, 4u8],
+      {5u8: "glyph_8"}, [6, 7, 8, 9u8], {10u8: "end"}
+    };
+
+    let data_offset = buffer.offset_for("glyph_0");
+    buffer.write_at("shared_tuples_offset", data_offset as u32);
+    buffer.write_at("glyph_variation_data_offset", data_offset as u32);
+
+    let glyph0_offset = ((buffer.offset_for("glyph_0") - data_offset) / 2) as u16;
+    let glyph8_offset = ((buffer.offset_for("glyph_8") - data_offset) / 2) as u16;
+    let end_offset = ((buffer.offset_for("end") + 1 - data_offset) / 2) as u16;
+
+    buffer.write_at("glyph_offset[0]", glyph0_offset);
+    buffer.write_at("glyph_offset[1]", glyph8_offset);
+    buffer.write_at("glyph_offset[2]", glyph8_offset);
+    buffer.write_at("glyph_offset[3]", glyph8_offset);
+    buffer.write_at("glyph_offset[4]", glyph8_offset);
+    buffer.write_at("glyph_offset[5]", glyph8_offset);
+    buffer.write_at("glyph_offset[6]", glyph8_offset);
+    buffer.write_at("glyph_offset[7]", glyph8_offset);
+    buffer.write_at("glyph_offset[8]", glyph8_offset);
+    buffer.write_at("glyph_offset[9]", end_offset);
+    buffer.write_at("glyph_offset[10]", end_offset);
+    buffer.write_at("glyph_offset[11]", end_offset);
+    buffer.write_at("glyph_offset[12]", end_offset);
+    buffer.write_at("glyph_offset[13]", end_offset);
+    buffer.write_at("glyph_offset[14]", end_offset);
+    buffer.write_at("glyph_offset[15]", end_offset);
+
+    buffer
+}
+
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/gvar>
+pub fn out_of_order_gvar_with_shared_tuples() -> BeBuffer {
+    let mut buffer = be_buffer! {
+      // HEADER
+      1u16, // major version
+      0u16, // minor version
+      1u16, // axis count
+      3u16, // sharedTupleCount
+      {0u32: "shared_tuples_offset"},
+      15u16, // glyph count
+      0u16,  // flags
+      {0u32: "glyph_variation_data_offset"},
+
+      // OFFSETS
+      {0u16: "glyph_offset[0]"},
+      {0u16: "glyph_offset[1]"},
+      {0u16: "glyph_offset[2]"},
+      {0u16: "glyph_offset[3]"},
+      {0u16: "glyph_offset[4]"},
+      {0u16: "glyph_offset[5]"},
+      {0u16: "glyph_offset[6]"},
+      {0u16: "glyph_offset[7]"},
+      {0u16: "glyph_offset[8]"},
+      {0u16: "glyph_offset[9]"},
+      {0u16: "glyph_offset[10]"},
+      {0u16: "glyph_offset[11]"},
+      {0u16: "glyph_offset[12]"},
+      {0u16: "glyph_offset[13]"},
+      {0u16: "glyph_offset[14]"},
+      {0u16: "glyph_offset[15]"},
+
+      // GLYPH VARIATION DATA
+      {1u8: "glyph_0"}, [2, 3, 4u8],
+      {5u8: "glyph_8"}, [6, 7, 8, 9u8], {10u8: "end"},
+
+      // SHARED TUPLES
+      {42u16: "sharedTuples[0]"},
+      13u16,
+      25u16
+    };
+
+    let offset = buffer.offset_for("sharedTuples[0]") as u32;
+    buffer.write_at("shared_tuples_offset", offset);
+
+    let data_offset = buffer.offset_for("glyph_0");
+    buffer.write_at("glyph_variation_data_offset", data_offset as u32);
+
+    let glyph0_offset = ((buffer.offset_for("glyph_0") - data_offset) / 2) as u16;
+    let glyph8_offset = ((buffer.offset_for("glyph_8") - data_offset) / 2) as u16;
+    let end_offset = ((buffer.offset_for("end") + 1 - data_offset) / 2) as u16;
+
+    buffer.write_at("glyph_offset[0]", glyph0_offset);
+    buffer.write_at("glyph_offset[1]", glyph8_offset);
+    buffer.write_at("glyph_offset[2]", glyph8_offset);
+    buffer.write_at("glyph_offset[3]", glyph8_offset);
+    buffer.write_at("glyph_offset[4]", glyph8_offset);
+    buffer.write_at("glyph_offset[5]", glyph8_offset);
+    buffer.write_at("glyph_offset[6]", glyph8_offset);
+    buffer.write_at("glyph_offset[7]", glyph8_offset);
+    buffer.write_at("glyph_offset[8]", glyph8_offset);
+    buffer.write_at("glyph_offset[9]", end_offset);
+    buffer.write_at("glyph_offset[10]", end_offset);
+    buffer.write_at("glyph_offset[11]", end_offset);
+    buffer.write_at("glyph_offset[12]", end_offset);
+    buffer.write_at("glyph_offset[13]", end_offset);
+    buffer.write_at("glyph_offset[14]", end_offset);
+    buffer.write_at("glyph_offset[15]", end_offset);
 
     buffer
 }

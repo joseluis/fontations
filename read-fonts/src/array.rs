@@ -47,7 +47,7 @@ impl<'a, T: ComputeSize> ComputedArray<'a, T> {
     }
 }
 
-impl<'a, T: ReadArgs> ReadArgs for ComputedArray<'a, T> {
+impl<T: ReadArgs> ReadArgs for ComputedArray<'_, T> {
     type Args = T::Args;
 }
 
@@ -142,7 +142,8 @@ impl<'a, T: FontRead<'a> + VarSize> VarLenArray<'a, T> {
             }
 
             let item_len = T::read_len_at(data, 0)?;
-            let next = T::read(data);
+            let item_data = data.slice(..item_len)?;
+            let next = T::read(item_data);
             data = data.split_off(item_len)?;
             Some(next)
         })
@@ -158,7 +159,7 @@ impl<'a, T> FontRead<'a> for VarLenArray<'a, T> {
     }
 }
 
-impl<'a, T: AnyBitPattern> ReadArgs for &'a [T] {
+impl<T: AnyBitPattern> ReadArgs for &[T] {
     type Args = u16;
 }
 

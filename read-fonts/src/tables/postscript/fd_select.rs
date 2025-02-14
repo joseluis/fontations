@@ -4,7 +4,7 @@ use types::GlyphId;
 
 use super::FdSelect;
 
-impl<'a> FdSelect<'a> {
+impl FdSelect<'_> {
     /// Returns the associated font DICT index for the given glyph identifier.
     pub fn font_index(&self, glyph_id: GlyphId) -> Option<u16> {
         match self {
@@ -39,8 +39,9 @@ impl<'a> FdSelect<'a> {
 
 #[cfg(test)]
 mod tests {
+    use font_test_data::bebuffer::BeBuffer;
+
     use super::{FdSelect, GlyphId};
-    use crate::test_helpers::BeBuffer;
     use crate::FontRead;
     use std::ops::Range;
 
@@ -54,7 +55,7 @@ mod tests {
             (128..1024, 2),
         ];
         for data in make_fd_selects(map) {
-            let fd_select = FdSelect::read(data.font_data()).unwrap();
+            let fd_select = FdSelect::read(data.data().into()).unwrap();
             for (range, font_index) in map {
                 for gid in range.clone() {
                     assert_eq!(

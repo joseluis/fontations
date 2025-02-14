@@ -13,21 +13,30 @@ pub struct LtagMarker {
 }
 
 impl LtagMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn num_tags_byte_range(&self) -> Range<usize> {
+
+    pub fn num_tags_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn tag_ranges_byte_range(&self) -> Range<usize> {
+
+    pub fn tag_ranges_byte_range(&self) -> Range<usize> {
         let start = self.num_tags_byte_range().end;
         start..start + self.tag_ranges_byte_len
+    }
+}
+
+impl MinByteRange for LtagMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.tag_ranges_byte_range().end
     }
 }
 
@@ -55,6 +64,7 @@ impl<'a> FontRead<'a> for Ltag<'a> {
 /// The [language tag](https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6ltag.html) table.
 pub type Ltag<'a> = TableRef<'a, LtagMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Ltag<'a> {
     /// Table version; currently 1.
     pub fn version(&self) -> u32 {
@@ -105,6 +115,7 @@ impl<'a> SomeTable<'a> for Ltag<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Ltag<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

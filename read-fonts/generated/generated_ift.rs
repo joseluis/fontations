@@ -62,6 +62,15 @@ impl<'a> FontRead<'a> for Ift<'a> {
     }
 }
 
+impl MinByteRange for Ift<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1(item) => item.min_byte_range(),
+            Self::Format2(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> Ift<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -73,7 +82,7 @@ impl<'a> Ift<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for Ift<'a> {
+impl std::fmt::Debug for Ift<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -102,53 +111,70 @@ pub struct PatchMapFormat1Marker {
 }
 
 impl PatchMapFormat1Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn _reserved_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn compatibility_id_byte_range(&self) -> Range<usize> {
+
+    pub fn compatibility_id_byte_range(&self) -> Range<usize> {
         let start = self._reserved_byte_range().end;
         start..start + CompatibilityId::RAW_BYTE_LEN
     }
-    fn max_entry_index_byte_range(&self) -> Range<usize> {
+
+    pub fn max_entry_index_byte_range(&self) -> Range<usize> {
         let start = self.compatibility_id_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn max_glyph_map_entry_index_byte_range(&self) -> Range<usize> {
+
+    pub fn max_glyph_map_entry_index_byte_range(&self) -> Range<usize> {
         let start = self.max_entry_index_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.max_glyph_map_entry_index_byte_range().end;
         start..start + Uint24::RAW_BYTE_LEN
     }
-    fn glyph_map_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_map_offset_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn feature_map_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_map_offset_byte_range(&self) -> Range<usize> {
         let start = self.glyph_map_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn applied_entries_bitmap_byte_range(&self) -> Range<usize> {
+
+    pub fn applied_entries_bitmap_byte_range(&self) -> Range<usize> {
         let start = self.feature_map_offset_byte_range().end;
         start..start + self.applied_entries_bitmap_byte_len
     }
-    fn uri_template_length_byte_range(&self) -> Range<usize> {
+
+    pub fn uri_template_length_byte_range(&self) -> Range<usize> {
         let start = self.applied_entries_bitmap_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn uri_template_byte_range(&self) -> Range<usize> {
+
+    pub fn uri_template_byte_range(&self) -> Range<usize> {
         let start = self.uri_template_length_byte_range().end;
         start..start + self.uri_template_byte_len
     }
-    fn patch_encoding_byte_range(&self) -> Range<usize> {
+
+    pub fn patch_format_byte_range(&self) -> Range<usize> {
         let start = self.uri_template_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for PatchMapFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.patch_format_byte_range().end
     }
 }
 
@@ -163,7 +189,7 @@ impl<'a> FontRead<'a> for PatchMapFormat1<'a> {
         cursor.advance::<Uint24>();
         cursor.advance::<Offset32>();
         cursor.advance::<Offset32>();
-        let applied_entries_bitmap_byte_len = (transforms::bitmap_len(max_entry_index + 1))
+        let applied_entries_bitmap_byte_len = (transforms::max_value_bitmap_len(max_entry_index))
             .checked_mul(u8::RAW_BYTE_LEN)
             .ok_or(ReadError::OutOfBounds)?;
         cursor.advance_by(applied_entries_bitmap_byte_len);
@@ -183,6 +209,7 @@ impl<'a> FontRead<'a> for PatchMapFormat1<'a> {
 /// [Patch Map Format Format 1](https://w3c.github.io/IFT/Overview.html#patch-map-format-1)
 pub type PatchMapFormat1<'a> = TableRef<'a, PatchMapFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> PatchMapFormat1<'a> {
     /// Format identifier: format = 1
     pub fn format(&self) -> u8 {
@@ -255,8 +282,8 @@ impl<'a> PatchMapFormat1<'a> {
     }
 
     /// Patch format number for patches referenced by this mapping.
-    pub fn patch_encoding(&self) -> u8 {
-        let range = self.shape.patch_encoding_byte_range();
+    pub fn patch_format(&self) -> u8 {
+        let range = self.shape.patch_format_byte_range();
         self.data.read_at(range.start).unwrap()
     }
 }
@@ -296,13 +323,14 @@ impl<'a> SomeTable<'a> for PatchMapFormat1<'a> {
                 self.uri_template_length(),
             )),
             9usize => Some(Field::new("uri_template", self.uri_template())),
-            10usize => Some(Field::new("patch_encoding", self.patch_encoding())),
+            10usize => Some(Field::new("patch_format", self.patch_format())),
             _ => None,
         }
     }
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for PatchMapFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -317,13 +345,20 @@ pub struct GlyphMapMarker {
 }
 
 impl GlyphMapMarker {
-    fn first_mapped_glyph_byte_range(&self) -> Range<usize> {
+    pub fn first_mapped_glyph_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn entry_index_byte_range(&self) -> Range<usize> {
+
+    pub fn entry_index_byte_range(&self) -> Range<usize> {
         let start = self.first_mapped_glyph_byte_range().end;
         start..start + self.entry_index_byte_len
+    }
+}
+
+impl MinByteRange for GlyphMapMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.entry_index_byte_range().end
     }
 }
 
@@ -364,6 +399,7 @@ impl<'a> GlyphMap<'a> {
 
 pub type GlyphMap<'a> = TableRef<'a, GlyphMapMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> GlyphMap<'a> {
     pub fn first_mapped_glyph(&self) -> u16 {
         let range = self.shape.first_mapped_glyph_byte_range();
@@ -397,6 +433,7 @@ impl<'a> SomeTable<'a> for GlyphMap<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for GlyphMap<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -412,17 +449,25 @@ pub struct FeatureMapMarker {
 }
 
 impl FeatureMapMarker {
-    fn feature_count_byte_range(&self) -> Range<usize> {
+    pub fn feature_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn feature_records_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_records_byte_range(&self) -> Range<usize> {
         let start = self.feature_count_byte_range().end;
         start..start + self.feature_records_byte_len
     }
-    fn entry_map_data_byte_range(&self) -> Range<usize> {
+
+    pub fn entry_map_data_byte_range(&self) -> Range<usize> {
         let start = self.feature_records_byte_range().end;
         start..start + self.entry_map_data_byte_len
+    }
+}
+
+impl MinByteRange for FeatureMapMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.entry_map_data_byte_range().end
     }
 }
 
@@ -465,6 +510,7 @@ impl<'a> FeatureMap<'a> {
 
 pub type FeatureMap<'a> = TableRef<'a, FeatureMapMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FeatureMap<'a> {
     pub fn feature_count(&self) -> u16 {
         let range = self.shape.feature_count_byte_range();
@@ -504,6 +550,7 @@ impl<'a> SomeTable<'a> for FeatureMap<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FeatureMap<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -565,6 +612,7 @@ impl<'a> FontReadWithArgs<'a> for FeatureRecord {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FeatureRecord {
     /// A constructor that requires additional arguments.
     ///
@@ -641,6 +689,7 @@ impl<'a> FontReadWithArgs<'a> for EntryMapRecord {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> EntryMapRecord {
     /// A constructor that requires additional arguments.
     ///
@@ -685,41 +734,55 @@ pub struct PatchMapFormat2Marker {
 }
 
 impl PatchMapFormat2Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn _reserved_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn compatibility_id_byte_range(&self) -> Range<usize> {
+
+    pub fn compatibility_id_byte_range(&self) -> Range<usize> {
         let start = self._reserved_byte_range().end;
         start..start + CompatibilityId::RAW_BYTE_LEN
     }
-    fn default_patch_encoding_byte_range(&self) -> Range<usize> {
+
+    pub fn default_patch_format_byte_range(&self) -> Range<usize> {
         let start = self.compatibility_id_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn entry_count_byte_range(&self) -> Range<usize> {
-        let start = self.default_patch_encoding_byte_range().end;
+
+    pub fn entry_count_byte_range(&self) -> Range<usize> {
+        let start = self.default_patch_format_byte_range().end;
         start..start + Uint24::RAW_BYTE_LEN
     }
-    fn entries_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn entries_offset_byte_range(&self) -> Range<usize> {
         let start = self.entry_count_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn entry_id_string_data_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn entry_id_string_data_offset_byte_range(&self) -> Range<usize> {
         let start = self.entries_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn uri_template_length_byte_range(&self) -> Range<usize> {
+
+    pub fn uri_template_length_byte_range(&self) -> Range<usize> {
         let start = self.entry_id_string_data_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn uri_template_byte_range(&self) -> Range<usize> {
+
+    pub fn uri_template_byte_range(&self) -> Range<usize> {
         let start = self.uri_template_length_byte_range().end;
         start..start + self.uri_template_byte_len
+    }
+}
+
+impl MinByteRange for PatchMapFormat2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.uri_template_byte_range().end
     }
 }
 
@@ -747,6 +810,7 @@ impl<'a> FontRead<'a> for PatchMapFormat2<'a> {
 /// [Patch Map Format Format 2](https://w3c.github.io/IFT/Overview.html#patch-map-format-2)
 pub type PatchMapFormat2<'a> = TableRef<'a, PatchMapFormat2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> PatchMapFormat2<'a> {
     /// Format identifier: format = 2
     pub fn format(&self) -> u8 {
@@ -761,8 +825,8 @@ impl<'a> PatchMapFormat2<'a> {
     }
 
     /// Patch format number for patches referenced by this mapping.
-    pub fn default_patch_encoding(&self) -> u8 {
-        let range = self.shape.default_patch_encoding_byte_range();
+    pub fn default_patch_format(&self) -> u8 {
+        let range = self.shape.default_patch_format_byte_range();
         self.data.read_at(range.start).unwrap()
     }
 
@@ -817,8 +881,8 @@ impl<'a> SomeTable<'a> for PatchMapFormat2<'a> {
                 traversal::FieldType::Unknown,
             )),
             2usize => Some(Field::new(
-                "default_patch_encoding",
-                self.default_patch_encoding(),
+                "default_patch_format",
+                self.default_patch_format(),
             )),
             3usize => Some(Field::new("entry_count", self.entry_count())),
             4usize => Some(Field::new(
@@ -843,6 +907,7 @@ impl<'a> SomeTable<'a> for PatchMapFormat2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for PatchMapFormat2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -856,9 +921,15 @@ pub struct MappingEntriesMarker {
 }
 
 impl MappingEntriesMarker {
-    fn entry_data_byte_range(&self) -> Range<usize> {
+    pub fn entry_data_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + self.entry_data_byte_len
+    }
+}
+
+impl MinByteRange for MappingEntriesMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.entry_data_byte_range().end
     }
 }
 
@@ -875,6 +946,7 @@ impl<'a> FontRead<'a> for MappingEntries<'a> {
 
 pub type MappingEntries<'a> = TableRef<'a, MappingEntriesMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> MappingEntries<'a> {
     pub fn entry_data(&self) -> &'a [u8] {
         let range = self.shape.entry_data_byte_range();
@@ -896,6 +968,7 @@ impl<'a> SomeTable<'a> for MappingEntries<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for MappingEntries<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -912,55 +985,70 @@ pub struct EntryDataMarker {
     design_space_count_byte_start: Option<usize>,
     design_space_segments_byte_start: Option<usize>,
     design_space_segments_byte_len: Option<usize>,
-    copy_count_byte_start: Option<usize>,
-    copy_indices_byte_start: Option<usize>,
-    copy_indices_byte_len: Option<usize>,
+    match_mode_and_count_byte_start: Option<usize>,
+    child_indices_byte_start: Option<usize>,
+    child_indices_byte_len: Option<usize>,
     entry_id_delta_byte_start: Option<usize>,
     entry_id_delta_byte_len: Option<usize>,
-    patch_encoding_byte_start: Option<usize>,
+    patch_format_byte_start: Option<usize>,
     codepoint_data_byte_len: usize,
 }
 
 impl EntryDataMarker {
-    fn format_flags_byte_range(&self) -> Range<usize> {
+    pub fn format_flags_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + EntryFormatFlags::RAW_BYTE_LEN
     }
-    fn feature_count_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn feature_count_byte_range(&self) -> Option<Range<usize>> {
         let start = self.feature_count_byte_start?;
         Some(start..start + u8::RAW_BYTE_LEN)
     }
-    fn feature_tags_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn feature_tags_byte_range(&self) -> Option<Range<usize>> {
         let start = self.feature_tags_byte_start?;
         Some(start..start + self.feature_tags_byte_len?)
     }
-    fn design_space_count_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn design_space_count_byte_range(&self) -> Option<Range<usize>> {
         let start = self.design_space_count_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn design_space_segments_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn design_space_segments_byte_range(&self) -> Option<Range<usize>> {
         let start = self.design_space_segments_byte_start?;
         Some(start..start + self.design_space_segments_byte_len?)
     }
-    fn copy_count_byte_range(&self) -> Option<Range<usize>> {
-        let start = self.copy_count_byte_start?;
-        Some(start..start + u8::RAW_BYTE_LEN)
+
+    pub fn match_mode_and_count_byte_range(&self) -> Option<Range<usize>> {
+        let start = self.match_mode_and_count_byte_start?;
+        Some(start..start + MatchModeAndCount::RAW_BYTE_LEN)
     }
-    fn copy_indices_byte_range(&self) -> Option<Range<usize>> {
-        let start = self.copy_indices_byte_start?;
-        Some(start..start + self.copy_indices_byte_len?)
+
+    pub fn child_indices_byte_range(&self) -> Option<Range<usize>> {
+        let start = self.child_indices_byte_start?;
+        Some(start..start + self.child_indices_byte_len?)
     }
-    fn entry_id_delta_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn entry_id_delta_byte_range(&self) -> Option<Range<usize>> {
         let start = self.entry_id_delta_byte_start?;
         Some(start..start + self.entry_id_delta_byte_len?)
     }
-    fn patch_encoding_byte_range(&self) -> Option<Range<usize>> {
-        let start = self.patch_encoding_byte_start?;
+
+    pub fn patch_format_byte_range(&self) -> Option<Range<usize>> {
+        let start = self.patch_format_byte_start?;
         Some(start..start + u8::RAW_BYTE_LEN)
     }
-    fn codepoint_data_byte_range(&self) -> Range<usize> {
-        let start = self . patch_encoding_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . entry_id_delta_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . copy_indices_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . copy_count_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . design_space_segments_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . design_space_count_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . feature_tags_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . feature_count_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . format_flags_byte_range () . end)))))))) ;
+
+    pub fn codepoint_data_byte_range(&self) -> Range<usize> {
+        let start = self . patch_format_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . entry_id_delta_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . child_indices_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . match_mode_and_count_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . design_space_segments_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . design_space_count_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . feature_tags_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . feature_count_byte_range () . map (| range | range . end) . unwrap_or_else (|| self . format_flags_byte_range () . end)))))))) ;
         start..start + self.codepoint_data_byte_len
+    }
+}
+
+impl MinByteRange for EntryDataMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.codepoint_data_byte_range().end
     }
 }
 
@@ -981,7 +1069,7 @@ impl<'a> FontReadWithArgs<'a> for EntryData<'a> {
             .contains(EntryFormatFlags::FEATURES_AND_DESIGN_SPACE)
             .then(|| cursor.read::<u8>())
             .transpose()?
-            .unwrap_or(0);
+            .unwrap_or_default();
         let feature_tags_byte_start = format_flags
             .contains(EntryFormatFlags::FEATURES_AND_DESIGN_SPACE)
             .then(|| cursor.position())
@@ -1004,7 +1092,7 @@ impl<'a> FontReadWithArgs<'a> for EntryData<'a> {
             .contains(EntryFormatFlags::FEATURES_AND_DESIGN_SPACE)
             .then(|| cursor.read::<u16>())
             .transpose()?
-            .unwrap_or(0);
+            .unwrap_or_default();
         let design_space_segments_byte_start = format_flags
             .contains(EntryFormatFlags::FEATURES_AND_DESIGN_SPACE)
             .then(|| cursor.position())
@@ -1019,27 +1107,27 @@ impl<'a> FontReadWithArgs<'a> for EntryData<'a> {
         if let Some(value) = design_space_segments_byte_len {
             cursor.advance_by(value);
         }
-        let copy_count_byte_start = format_flags
-            .contains(EntryFormatFlags::COPY_INDICES)
+        let match_mode_and_count_byte_start = format_flags
+            .contains(EntryFormatFlags::CHILD_INDICES)
             .then(|| cursor.position())
             .transpose()?;
-        let copy_count = format_flags
-            .contains(EntryFormatFlags::COPY_INDICES)
-            .then(|| cursor.read::<u8>())
+        let match_mode_and_count = format_flags
+            .contains(EntryFormatFlags::CHILD_INDICES)
+            .then(|| cursor.read::<MatchModeAndCount>())
             .transpose()?
-            .unwrap_or(0);
-        let copy_indices_byte_start = format_flags
-            .contains(EntryFormatFlags::COPY_INDICES)
+            .unwrap_or_default();
+        let child_indices_byte_start = format_flags
+            .contains(EntryFormatFlags::CHILD_INDICES)
             .then(|| cursor.position())
             .transpose()?;
-        let copy_indices_byte_len = format_flags
-            .contains(EntryFormatFlags::COPY_INDICES)
+        let child_indices_byte_len = format_flags
+            .contains(EntryFormatFlags::CHILD_INDICES)
             .then_some(
-                (copy_count as usize)
+                (usize::try_from(match_mode_and_count).unwrap_or_default())
                     .checked_mul(Uint24::RAW_BYTE_LEN)
                     .ok_or(ReadError::OutOfBounds)?,
             );
-        if let Some(value) = copy_indices_byte_len {
+        if let Some(value) = child_indices_byte_len {
             cursor.advance_by(value);
         }
         let entry_id_delta_byte_start = format_flags
@@ -1054,12 +1142,12 @@ impl<'a> FontReadWithArgs<'a> for EntryData<'a> {
         if let Some(value) = entry_id_delta_byte_len {
             cursor.advance_by(value);
         }
-        let patch_encoding_byte_start = format_flags
-            .contains(EntryFormatFlags::PATCH_ENCODING)
+        let patch_format_byte_start = format_flags
+            .contains(EntryFormatFlags::PATCH_FORMAT)
             .then(|| cursor.position())
             .transpose()?;
         format_flags
-            .contains(EntryFormatFlags::PATCH_ENCODING)
+            .contains(EntryFormatFlags::PATCH_FORMAT)
             .then(|| cursor.advance::<u8>());
         let codepoint_data_byte_len =
             cursor.remaining_bytes() / u8::RAW_BYTE_LEN * u8::RAW_BYTE_LEN;
@@ -1072,12 +1160,12 @@ impl<'a> FontReadWithArgs<'a> for EntryData<'a> {
             design_space_count_byte_start,
             design_space_segments_byte_start,
             design_space_segments_byte_len,
-            copy_count_byte_start,
-            copy_indices_byte_start,
-            copy_indices_byte_len,
+            match_mode_and_count_byte_start,
+            child_indices_byte_start,
+            child_indices_byte_len,
             entry_id_delta_byte_start,
             entry_id_delta_byte_len,
-            patch_encoding_byte_start,
+            patch_format_byte_start,
             codepoint_data_byte_len,
         })
     }
@@ -1099,6 +1187,7 @@ impl<'a> EntryData<'a> {
 
 pub type EntryData<'a> = TableRef<'a, EntryDataMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> EntryData<'a> {
     pub fn format_flags(&self) -> EntryFormatFlags {
         let range = self.shape.format_flags_byte_range();
@@ -1125,13 +1214,13 @@ impl<'a> EntryData<'a> {
         Some(self.data.read_array(range).unwrap())
     }
 
-    pub fn copy_count(&self) -> Option<u8> {
-        let range = self.shape.copy_count_byte_range()?;
+    pub fn match_mode_and_count(&self) -> Option<MatchModeAndCount> {
+        let range = self.shape.match_mode_and_count_byte_range()?;
         Some(self.data.read_at(range.start).unwrap())
     }
 
-    pub fn copy_indices(&self) -> Option<&'a [BigEndian<Uint24>]> {
-        let range = self.shape.copy_indices_byte_range()?;
+    pub fn child_indices(&self) -> Option<&'a [BigEndian<Uint24>]> {
+        let range = self.shape.child_indices_byte_range()?;
         Some(self.data.read_array(range).unwrap())
     }
 
@@ -1144,8 +1233,8 @@ impl<'a> EntryData<'a> {
         )
     }
 
-    pub fn patch_encoding(&self) -> Option<u8> {
-        let range = self.shape.patch_encoding_byte_range()?;
+    pub fn patch_format(&self) -> Option<u8> {
+        let range = self.shape.patch_format_byte_range()?;
         Some(self.data.read_at(range.start).unwrap())
     }
 
@@ -1187,17 +1276,18 @@ impl<'a> SomeTable<'a> for EntryData<'a> {
                     ),
                 ))
             }
-            5usize if format_flags.contains(EntryFormatFlags::COPY_INDICES) => {
-                Some(Field::new("copy_count", self.copy_count().unwrap()))
-            }
-            6usize if format_flags.contains(EntryFormatFlags::COPY_INDICES) => {
-                Some(Field::new("copy_indices", self.copy_indices().unwrap()))
+            5usize if format_flags.contains(EntryFormatFlags::CHILD_INDICES) => Some(Field::new(
+                "match_mode_and_count",
+                traversal::FieldType::Unknown,
+            )),
+            6usize if format_flags.contains(EntryFormatFlags::CHILD_INDICES) => {
+                Some(Field::new("child_indices", self.child_indices().unwrap()))
             }
             7usize if format_flags.contains(EntryFormatFlags::ENTRY_ID_DELTA) => {
                 Some(Field::new("entry_id_delta", traversal::FieldType::Unknown))
             }
-            8usize if format_flags.contains(EntryFormatFlags::PATCH_ENCODING) => {
-                Some(Field::new("patch_encoding", self.patch_encoding().unwrap()))
+            8usize if format_flags.contains(EntryFormatFlags::PATCH_FORMAT) => {
+                Some(Field::new("patch_format", self.patch_format().unwrap()))
             }
             9usize => Some(Field::new("codepoint_data", self.codepoint_data())),
             _ => None,
@@ -1206,6 +1296,7 @@ impl<'a> SomeTable<'a> for EntryData<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for EntryData<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1222,11 +1313,11 @@ pub struct EntryFormatFlags {
 impl EntryFormatFlags {
     pub const FEATURES_AND_DESIGN_SPACE: Self = Self { bits: 0b00000001 };
 
-    pub const COPY_INDICES: Self = Self { bits: 0b00000010 };
+    pub const CHILD_INDICES: Self = Self { bits: 0b00000010 };
 
     pub const ENTRY_ID_DELTA: Self = Self { bits: 0b00000100 };
 
-    pub const PATCH_ENCODING: Self = Self { bits: 0b00001000 };
+    pub const PATCH_FORMAT: Self = Self { bits: 0b00001000 };
 
     pub const CODEPOINTS_BIT_1: Self = Self { bits: 0b00010000 };
 
@@ -1249,9 +1340,9 @@ impl EntryFormatFlags {
     pub const fn all() -> Self {
         Self {
             bits: Self::FEATURES_AND_DESIGN_SPACE.bits
-                | Self::COPY_INDICES.bits
+                | Self::CHILD_INDICES.bits
                 | Self::ENTRY_ID_DELTA.bits
-                | Self::PATCH_ENCODING.bits
+                | Self::PATCH_FORMAT.bits
                 | Self::CODEPOINTS_BIT_1.bits
                 | Self::CODEPOINTS_BIT_2.bits
                 | Self::IGNORED.bits
@@ -1475,9 +1566,9 @@ impl std::fmt::Debug for EntryFormatFlags {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let members: &[(&str, Self)] = &[
             ("FEATURES_AND_DESIGN_SPACE", Self::FEATURES_AND_DESIGN_SPACE),
-            ("COPY_INDICES", Self::COPY_INDICES),
+            ("CHILD_INDICES", Self::CHILD_INDICES),
             ("ENTRY_ID_DELTA", Self::ENTRY_ID_DELTA),
-            ("PATCH_ENCODING", Self::PATCH_ENCODING),
+            ("PATCH_FORMAT", Self::PATCH_FORMAT),
             ("CODEPOINTS_BIT_1", Self::CODEPOINTS_BIT_1),
             ("CODEPOINTS_BIT_2", Self::CODEPOINTS_BIT_2),
             ("IGNORED", Self::IGNORED),
@@ -1592,9 +1683,15 @@ pub struct IdStringDataMarker {
 }
 
 impl IdStringDataMarker {
-    fn id_data_byte_range(&self) -> Range<usize> {
+    pub fn id_data_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + self.id_data_byte_len
+    }
+}
+
+impl MinByteRange for IdStringDataMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.id_data_byte_range().end
     }
 }
 
@@ -1609,6 +1706,7 @@ impl<'a> FontRead<'a> for IdStringData<'a> {
 
 pub type IdStringData<'a> = TableRef<'a, IdStringDataMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> IdStringData<'a> {
     pub fn id_data(&self) -> &'a [u8] {
         let range = self.shape.id_data_byte_range();
@@ -1630,6 +1728,7 @@ impl<'a> SomeTable<'a> for IdStringData<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for IdStringData<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1644,25 +1743,35 @@ pub struct TableKeyedPatchMarker {
 }
 
 impl TableKeyedPatchMarker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + Tag::RAW_BYTE_LEN
     }
-    fn _reserved_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn compatibility_id_byte_range(&self) -> Range<usize> {
+
+    pub fn compatibility_id_byte_range(&self) -> Range<usize> {
         let start = self._reserved_byte_range().end;
         start..start + CompatibilityId::RAW_BYTE_LEN
     }
-    fn patches_count_byte_range(&self) -> Range<usize> {
+
+    pub fn patches_count_byte_range(&self) -> Range<usize> {
         let start = self.compatibility_id_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn patch_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn patch_offsets_byte_range(&self) -> Range<usize> {
         let start = self.patches_count_byte_range().end;
         start..start + self.patch_offsets_byte_len
+    }
+}
+
+impl MinByteRange for TableKeyedPatchMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.patch_offsets_byte_range().end
     }
 }
 
@@ -1686,6 +1795,7 @@ impl<'a> FontRead<'a> for TableKeyedPatch<'a> {
 /// [Table Keyed Patch](https://w3c.github.io/IFT/Overview.html#table-keyed)
 pub type TableKeyedPatch<'a> = TableRef<'a, TableKeyedPatchMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> TableKeyedPatch<'a> {
     pub fn format(&self) -> Tag {
         let range = self.shape.format_byte_range();
@@ -1749,6 +1859,7 @@ impl<'a> SomeTable<'a> for TableKeyedPatch<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for TableKeyedPatch<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1763,21 +1874,30 @@ pub struct TablePatchMarker {
 }
 
 impl TablePatchMarker {
-    fn tag_byte_range(&self) -> Range<usize> {
+    pub fn tag_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + Tag::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.tag_byte_range().end;
         start..start + TablePatchFlags::RAW_BYTE_LEN
     }
-    fn max_uncompressed_length_byte_range(&self) -> Range<usize> {
+
+    pub fn max_uncompressed_length_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn brotli_stream_byte_range(&self) -> Range<usize> {
+
+    pub fn brotli_stream_byte_range(&self) -> Range<usize> {
         let start = self.max_uncompressed_length_byte_range().end;
         start..start + self.brotli_stream_byte_len
+    }
+}
+
+impl MinByteRange for TablePatchMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.brotli_stream_byte_range().end
     }
 }
 
@@ -1798,6 +1918,7 @@ impl<'a> FontRead<'a> for TablePatch<'a> {
 /// [TablePatch](https://w3c.github.io/IFT/Overview.html#tablepatch)
 pub type TablePatch<'a> = TableRef<'a, TablePatchMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> TablePatch<'a> {
     pub fn tag(&self) -> Tag {
         let range = self.shape.tag_byte_range();
@@ -1840,6 +1961,7 @@ impl<'a> SomeTable<'a> for TablePatch<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for TablePatch<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2159,29 +2281,40 @@ pub struct GlyphKeyedPatchMarker {
 }
 
 impl GlyphKeyedPatchMarker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + Tag::RAW_BYTE_LEN
     }
-    fn _reserved_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self._reserved_byte_range().end;
         start..start + GlyphKeyedFlags::RAW_BYTE_LEN
     }
-    fn compatibility_id_byte_range(&self) -> Range<usize> {
+
+    pub fn compatibility_id_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + CompatibilityId::RAW_BYTE_LEN
     }
-    fn max_uncompressed_length_byte_range(&self) -> Range<usize> {
+
+    pub fn max_uncompressed_length_byte_range(&self) -> Range<usize> {
         let start = self.compatibility_id_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn brotli_stream_byte_range(&self) -> Range<usize> {
+
+    pub fn brotli_stream_byte_range(&self) -> Range<usize> {
         let start = self.max_uncompressed_length_byte_range().end;
         start..start + self.brotli_stream_byte_len
+    }
+}
+
+impl MinByteRange for GlyphKeyedPatchMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.brotli_stream_byte_range().end
     }
 }
 
@@ -2204,6 +2337,7 @@ impl<'a> FontRead<'a> for GlyphKeyedPatch<'a> {
 /// [Glyph Keyed Patch](https://w3c.github.io/IFT/Overview.html#glyph-keyed)
 pub type GlyphKeyedPatch<'a> = TableRef<'a, GlyphKeyedPatchMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> GlyphKeyedPatch<'a> {
     pub fn format(&self) -> Tag {
         let range = self.shape.format_byte_range();
@@ -2255,6 +2389,7 @@ impl<'a> SomeTable<'a> for GlyphKeyedPatch<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for GlyphKeyedPatch<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2577,25 +2712,35 @@ pub struct GlyphPatchesMarker {
 }
 
 impl GlyphPatchesMarker {
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn table_count_byte_range(&self) -> Range<usize> {
+
+    pub fn table_count_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn glyph_ids_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_ids_byte_range(&self) -> Range<usize> {
         let start = self.table_count_byte_range().end;
         start..start + self.glyph_ids_byte_len
     }
-    fn tables_byte_range(&self) -> Range<usize> {
+
+    pub fn tables_byte_range(&self) -> Range<usize> {
         let start = self.glyph_ids_byte_range().end;
         start..start + self.tables_byte_len
     }
-    fn glyph_data_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_data_offsets_byte_range(&self) -> Range<usize> {
         let start = self.tables_byte_range().end;
         start..start + self.glyph_data_offsets_byte_len
+    }
+}
+
+impl MinByteRange for GlyphPatchesMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.glyph_data_offsets_byte_range().end
     }
 }
 
@@ -2645,6 +2790,7 @@ impl<'a> GlyphPatches<'a> {
 /// [GlyphPatches](https://w3c.github.io/IFT/Overview.html#glyphpatches)
 pub type GlyphPatches<'a> = TableRef<'a, GlyphPatchesMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> GlyphPatches<'a> {
     pub fn glyph_count(&self) -> u32 {
         let range = self.shape.glyph_count_byte_range();
@@ -2714,6 +2860,7 @@ impl<'a> SomeTable<'a> for GlyphPatches<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for GlyphPatches<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2727,9 +2874,15 @@ pub struct GlyphDataMarker {
 }
 
 impl GlyphDataMarker {
-    fn data_byte_range(&self) -> Range<usize> {
+    pub fn data_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + self.data_byte_len
+    }
+}
+
+impl MinByteRange for GlyphDataMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.data_byte_range().end
     }
 }
 
@@ -2744,6 +2897,7 @@ impl<'a> FontRead<'a> for GlyphData<'a> {
 
 pub type GlyphData<'a> = TableRef<'a, GlyphDataMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> GlyphData<'a> {
     pub fn data(&self) -> &'a [u8] {
         let range = self.shape.data_byte_range();
@@ -2765,6 +2919,7 @@ impl<'a> SomeTable<'a> for GlyphData<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for GlyphData<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

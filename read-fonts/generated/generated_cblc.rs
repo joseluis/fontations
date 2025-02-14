@@ -13,21 +13,30 @@ pub struct CblcMarker {
 }
 
 impl CblcMarker {
-    fn major_version_byte_range(&self) -> Range<usize> {
+    pub fn major_version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn minor_version_byte_range(&self) -> Range<usize> {
+
+    pub fn minor_version_byte_range(&self) -> Range<usize> {
         let start = self.major_version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn num_sizes_byte_range(&self) -> Range<usize> {
+
+    pub fn num_sizes_byte_range(&self) -> Range<usize> {
         let start = self.minor_version_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn bitmap_sizes_byte_range(&self) -> Range<usize> {
+
+    pub fn bitmap_sizes_byte_range(&self) -> Range<usize> {
         let start = self.num_sizes_byte_range().end;
         start..start + self.bitmap_sizes_byte_len
+    }
+}
+
+impl MinByteRange for CblcMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.bitmap_sizes_byte_range().end
     }
 }
 
@@ -55,6 +64,7 @@ impl<'a> FontRead<'a> for Cblc<'a> {
 /// The [Color Bitmap Location](https://learn.microsoft.com/en-us/typography/opentype/spec/cblc) table
 pub type Cblc<'a> = TableRef<'a, CblcMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Cblc<'a> {
     /// Major version of the CBLC table, = 3.
     pub fn major_version(&self) -> u16 {
@@ -105,6 +115,7 @@ impl<'a> SomeTable<'a> for Cblc<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Cblc<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

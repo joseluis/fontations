@@ -11,25 +11,35 @@ use crate::codegen_prelude::*;
 pub struct HvarMarker {}
 
 impl HvarMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn item_variation_store_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn item_variation_store_offset_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn advance_width_mapping_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn advance_width_mapping_offset_byte_range(&self) -> Range<usize> {
         let start = self.item_variation_store_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn lsb_mapping_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn lsb_mapping_offset_byte_range(&self) -> Range<usize> {
         let start = self.advance_width_mapping_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn rsb_mapping_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn rsb_mapping_offset_byte_range(&self) -> Range<usize> {
         let start = self.lsb_mapping_offset_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for HvarMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.rsb_mapping_offset_byte_range().end
     }
 }
 
@@ -53,6 +63,7 @@ impl<'a> FontRead<'a> for Hvar<'a> {
 /// The [HVAR (Horizontal Metrics Variations)](https://docs.microsoft.com/en-us/typography/opentype/spec/hvar) table
 pub type Hvar<'a> = TableRef<'a, HvarMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Hvar<'a> {
     /// Major version number of the horizontal metrics variations table — set to 1.
     /// Minor version number of the horizontal metrics variations table — set to 0.
@@ -146,6 +157,7 @@ impl<'a> SomeTable<'a> for Hvar<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Hvar<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

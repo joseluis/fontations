@@ -14,13 +14,20 @@ pub struct VmtxMarker {
 }
 
 impl VmtxMarker {
-    fn v_metrics_byte_range(&self) -> Range<usize> {
+    pub fn v_metrics_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + self.v_metrics_byte_len
     }
-    fn top_side_bearings_byte_range(&self) -> Range<usize> {
+
+    pub fn top_side_bearings_byte_range(&self) -> Range<usize> {
         let start = self.v_metrics_byte_range().end;
         start..start + self.top_side_bearings_byte_len
+    }
+}
+
+impl MinByteRange for VmtxMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.top_side_bearings_byte_range().end
     }
 }
 
@@ -71,6 +78,7 @@ impl<'a> Vmtx<'a> {
 /// The [vmtx (Vertical Metrics)](https://docs.microsoft.com/en-us/typography/opentype/spec/vmtx) table
 pub type Vmtx<'a> = TableRef<'a, VmtxMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Vmtx<'a> {
     /// Paired advance height and top side bearing values for each
     /// glyph. Records are indexed by glyph ID.
@@ -108,6 +116,7 @@ impl<'a> SomeTable<'a> for Vmtx<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Vmtx<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

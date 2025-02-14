@@ -85,17 +85,12 @@ pub mod traversal;
 #[cfg(any(test, feature = "codegen_test"))]
 pub mod codegen_test;
 
-#[path = "tests/test_helpers.rs"]
-#[doc(hidden)]
-#[cfg(feature = "std")]
-pub mod test_helpers;
-
 pub use font_data::FontData;
 pub use offset::{Offset, ResolveNullableOffset, ResolveOffset};
 pub use offset_array::{ArrayOfNullableOffsets, ArrayOfOffsets};
 pub use read::{ComputeSize, FontRead, FontReadWithArgs, ReadArgs, ReadError, VarSize};
 pub use table_provider::{TableProvider, TopLevelTable};
-pub use table_ref::TableRef;
+pub use table_ref::{MinByteRange, TableRef};
 
 /// Public re-export of the font-types crate.
 pub extern crate font_types as types;
@@ -112,7 +107,7 @@ pub(crate) mod codegen_prelude {
         ComputeSize, FontRead, FontReadWithArgs, Format, ReadArgs, ReadError, VarSize,
     };
     pub use crate::table_provider::TopLevelTable;
-    pub use crate::table_ref::TableRef;
+    pub use crate::table_ref::{MinByteRange, TableRef};
     pub use std::ops::Range;
 
     pub use types::*;
@@ -144,8 +139,15 @@ pub(crate) mod codegen_prelude {
                 .saturating_add(rhs.try_into().unwrap_or_default())
         }
 
+        #[allow(dead_code)]
         pub fn bitmap_len<T: TryInto<usize>>(count: T) -> usize {
             (count.try_into().unwrap_or_default() + 7) / 8
+        }
+
+        #[cfg(feature = "ift")]
+        pub fn max_value_bitmap_len<T: TryInto<usize>>(count: T) -> usize {
+            let count: usize = count.try_into().unwrap_or_default() + 1usize;
+            (count + 7) / 8
         }
 
         pub fn add_multiply<T: TryInto<usize>, U: TryInto<usize>, V: TryInto<usize>>(
@@ -159,6 +161,7 @@ pub(crate) mod codegen_prelude {
                 .saturating_mul(c.try_into().unwrap_or_default())
         }
 
+        #[cfg(feature = "ift")]
         pub fn multiply_add<T: TryInto<usize>, U: TryInto<usize>, V: TryInto<usize>>(
             a: T,
             b: U,
@@ -172,6 +175,13 @@ pub(crate) mod codegen_prelude {
 
         pub fn half<T: TryInto<usize>>(val: T) -> usize {
             val.try_into().unwrap_or_default() / 2
+        }
+
+        pub fn subtract_add_two<T: TryInto<usize>, U: TryInto<usize>>(lhs: T, rhs: U) -> usize {
+            lhs.try_into()
+                .unwrap_or_default()
+                .saturating_sub(rhs.try_into().unwrap_or_default())
+                .saturating_add(2)
         }
     }
 }
@@ -261,7 +271,7 @@ impl<'a> CollectionRef<'a> {
 /// by a borrowed slice containing font data.
 #[derive(Clone)]
 pub struct FontRef<'a> {
-    data: FontData<'a>,
+    pub data: FontData<'a>,
     pub table_directory: TableDirectory<'a>,
 }
 
@@ -314,7 +324,7 @@ impl<'a> FontRef<'a> {
             .and_then(|record| {
                 let start = Offset32::new(record.offset()).non_null()?;
                 let len = record.length() as usize;
-                self.data.slice(start..start + len)
+                self.data.slice(start..start.checked_add(len)?)
             })
     }
 
@@ -322,7 +332,7 @@ impl<'a> FontRef<'a> {
         data: FontData<'a>,
         table_directory: TableDirectory<'a>,
     ) -> Result<Self, ReadError> {
-        if [TT_SFNT_VERSION, CFF_SFTN_VERSION, TRUE_SFNT_VERSION]
+        if [TT_SFNT_VERSION, CFF_SFNT_VERSION, TRUE_SFNT_VERSION]
             .contains(&table_directory.sfnt_version())
         {
             Ok(FontRef {

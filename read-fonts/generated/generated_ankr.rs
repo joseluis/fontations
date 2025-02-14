@@ -11,21 +11,30 @@ use crate::codegen_prelude::*;
 pub struct AnkrMarker {}
 
 impl AnkrMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lookup_table_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn lookup_table_offset_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn glyph_data_table_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_data_table_offset_byte_range(&self) -> Range<usize> {
         let start = self.lookup_table_offset_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for AnkrMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.glyph_data_table_offset_byte_range().end
     }
 }
 
@@ -48,6 +57,7 @@ impl<'a> FontRead<'a> for Ankr<'a> {
 /// The [anchor point](https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6ankr.html) table.
 pub type Ankr<'a> = TableRef<'a, AnkrMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Ankr<'a> {
     /// Version number (set to zero).
     pub fn version(&self) -> u16 {
@@ -105,6 +115,7 @@ impl<'a> SomeTable<'a> for Ankr<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Ankr<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -118,13 +129,20 @@ pub struct GlyphDataEntryMarker {
 }
 
 impl GlyphDataEntryMarker {
-    fn num_points_byte_range(&self) -> Range<usize> {
+    pub fn num_points_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn anchor_points_byte_range(&self) -> Range<usize> {
+
+    pub fn anchor_points_byte_range(&self) -> Range<usize> {
         let start = self.num_points_byte_range().end;
         start..start + self.anchor_points_byte_len
+    }
+}
+
+impl MinByteRange for GlyphDataEntryMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.anchor_points_byte_range().end
     }
 }
 
@@ -144,6 +162,7 @@ impl<'a> FontRead<'a> for GlyphDataEntry<'a> {
 
 pub type GlyphDataEntry<'a> = TableRef<'a, GlyphDataEntryMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> GlyphDataEntry<'a> {
     /// Number of anchor points for this glyph.
     pub fn num_points(&self) -> u32 {
@@ -180,6 +199,7 @@ impl<'a> SomeTable<'a> for GlyphDataEntry<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for GlyphDataEntry<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

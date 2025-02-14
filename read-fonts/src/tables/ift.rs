@@ -7,6 +7,61 @@ use std::str;
 pub const IFT_TAG: types::Tag = Tag::new(b"IFT ");
 pub const IFTX_TAG: types::Tag = Tag::new(b"IFTX");
 
+/// Wrapper for the packed childEntryMatchModeAndCount field in IFT format 2 mapping table.
+///
+/// Reference: <https://w3c.github.io/IFT/Overview.html#mapping-entry-childentrymatchmodeandcount>
+///
+/// The MSB is a flag which indicates conjunctive (bit set) or disjunctive (bit cleared) matching.
+/// The remaining 7 bits are a count.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MatchModeAndCount(u8);
+
+impl MatchModeAndCount {
+    /// Flag indicating that copy mode is append.
+    ///
+    /// See: <https://w3c.github.io/IFT/Overview.html#mapping-entry-copymodeandcount>
+    pub const MATCH_MODE_MASK: u8 = 0b10000000;
+
+    /// Mask for the low 7 bits to give the copy index count.
+    pub const COUNT_MASK: u8 = 0b01111111;
+
+    pub fn bits(self) -> u8 {
+        self.0
+    }
+
+    pub fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
+
+    /// If true matching mode is conjunctive (... AND ...) otherwise disjunctive (... OR ...)
+    pub fn conjunctive_match(self) -> bool {
+        (self.0 & Self::MATCH_MODE_MASK) != 0
+    }
+
+    pub fn count(self) -> u8 {
+        self.0 & Self::COUNT_MASK
+    }
+}
+
+impl TryFrom<MatchModeAndCount> for usize {
+    type Error = ReadError;
+
+    fn try_from(value: MatchModeAndCount) -> Result<Self, Self::Error> {
+        Ok(value.count() as usize)
+    }
+}
+
+impl types::Scalar for MatchModeAndCount {
+    type Raw = <u8 as types::Scalar>::Raw;
+    fn to_raw(self) -> Self::Raw {
+        self.0.to_raw()
+    }
+    fn from_raw(raw: Self::Raw) -> Self {
+        let t = <u8>::from_raw(raw);
+        Self(t)
+    }
+}
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Default, Ord, PartialOrd, Hash)]
 pub struct CompatibilityId([u8; 16]);
@@ -182,14 +237,14 @@ impl<'a> PatchMapFormat1<'a> {
     }
 }
 
-impl<'a> PatchMapFormat2<'a> {
+impl PatchMapFormat2<'_> {
     pub fn uri_template_as_string(&self) -> Result<&str, ReadError> {
         str::from_utf8(self.uri_template())
             .map_err(|_| ReadError::MalformedData("Invalid UTF8 encoding for uri template."))
     }
 }
 
-impl<'a> FeatureMap<'a> {
+impl FeatureMap<'_> {
     pub fn entry_records_size(&self, max_entry_index: u16) -> Result<usize, ReadError> {
         let field_width = if max_entry_index < 256 { 1 } else { 2 };
         let mut num_bytes = 0usize;
@@ -206,7 +261,7 @@ struct GidToEntryIter<'a> {
     gid: u32,
 }
 
-impl<'a> Iterator for GidToEntryIter<'a> {
+impl Iterator for GidToEntryIter<'_> {
     type Item = (GlyphId, u16);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -248,6 +303,7 @@ impl<'a> GlyphPatches<'a> {
         GlyphDataIterator {
             patches: self,
             offset_iterator: it,
+            previous_gid: None,
             failed: false,
         }
     }
@@ -260,6 +316,7 @@ where
 {
     patches: &'a GlyphPatches<'a>,
     offset_iterator: T,
+    previous_gid: Option<GlyphId>,
     failed: bool,
 }
 
@@ -282,6 +339,16 @@ where
                 return Some(Err(err));
             }
         };
+
+        if let Some(previous_gid) = self.previous_gid {
+            if gid <= previous_gid {
+                self.failed = true;
+                return Some(Err(ReadError::MalformedData(
+                    "Glyph IDs are unsorted or duplicated.",
+                )));
+            }
+        }
+        self.previous_gid = Some(gid);
 
         let len = match end
             .to_u32()
@@ -503,6 +570,48 @@ mod tests {
     }
 
     #[test]
+    fn glyph_keyed_glyph_data_non_ascending_gids() {
+        let mut builder = test_data::glyf_u16_glyph_patches();
+        builder.write_at("gid_8", 6);
+        let table =
+            GlyphPatches::read(FontData::new(builder.as_slice()), GlyphKeyedFlags::NONE).unwrap();
+
+        let it = table.glyph_data_for_table(0);
+
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![
+                Ok((GlyphId::new(2), b"abc".as_slice())),
+                Ok((GlyphId::new(7), b"defg".as_slice())),
+                Err(ReadError::MalformedData(
+                    "Glyph IDs are unsorted or duplicated."
+                )),
+            ]
+        );
+    }
+
+    #[test]
+    fn glyph_keyed_glyph_data_duplicate_gids() {
+        let mut builder = test_data::glyf_u16_glyph_patches();
+        builder.write_at("gid_8", 7);
+        let table =
+            GlyphPatches::read(FontData::new(builder.as_slice()), GlyphKeyedFlags::NONE).unwrap();
+
+        let it = table.glyph_data_for_table(0);
+
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![
+                Ok((GlyphId::new(2), b"abc".as_slice())),
+                Ok((GlyphId::new(7), b"defg".as_slice())),
+                Err(ReadError::MalformedData(
+                    "Glyph IDs are unsorted or duplicated."
+                )),
+            ]
+        );
+    }
+
+    #[test]
     fn glyph_keyed_glyph_data_for_one_table_non_ascending_offsets() {
         let mut builder = test_data::glyf_u16_glyph_patches();
         let gid_13 = builder.offset_for("gid_13_data") as u32;
@@ -520,7 +629,7 @@ mod tests {
             vec![
                 Ok((GlyphId::new(2), b"abc".as_slice())),
                 Ok((GlyphId::new(7), b"defg".as_slice())),
-                Ok((GlyphId::new(8), b"hijkl".as_slice())), // TODO XXXXX
+                Ok((GlyphId::new(8), b"hijkl".as_slice())),
                 Err(ReadError::MalformedData(
                     "glyph data offsets are not ascending."
                 )),

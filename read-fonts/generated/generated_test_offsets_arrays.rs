@@ -14,41 +14,55 @@ pub struct KindsOfOffsetsMarker {
 }
 
 impl KindsOfOffsetsMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn nonnullable_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn nonnullable_offset_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn nullable_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn nullable_offset_byte_range(&self) -> Range<usize> {
         let start = self.nonnullable_offset_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn array_offset_count_byte_range(&self) -> Range<usize> {
+
+    pub fn array_offset_count_byte_range(&self) -> Range<usize> {
         let start = self.nullable_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn array_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn array_offset_byte_range(&self) -> Range<usize> {
         let start = self.array_offset_count_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn record_array_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn record_array_offset_byte_range(&self) -> Range<usize> {
         let start = self.array_offset_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn versioned_nullable_record_array_offset_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn versioned_nullable_record_array_offset_byte_range(&self) -> Option<Range<usize>> {
         let start = self.versioned_nullable_record_array_offset_byte_start?;
         Some(start..start + Offset16::RAW_BYTE_LEN)
     }
-    fn versioned_nonnullable_offset_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn versioned_nonnullable_offset_byte_range(&self) -> Option<Range<usize>> {
         let start = self.versioned_nonnullable_offset_byte_start?;
         Some(start..start + Offset16::RAW_BYTE_LEN)
     }
-    fn versioned_nullable_offset_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn versioned_nullable_offset_byte_range(&self) -> Option<Range<usize>> {
         let start = self.versioned_nullable_offset_byte_start?;
         Some(start..start + Offset32::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for KindsOfOffsetsMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.record_array_offset_byte_range().end
     }
 }
 
@@ -92,6 +106,7 @@ impl<'a> FontRead<'a> for KindsOfOffsets<'a> {
 
 pub type KindsOfOffsets<'a> = TableRef<'a, KindsOfOffsetsMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> KindsOfOffsets<'a> {
     /// The major/minor version of the GDEF table
     pub fn version(&self) -> MajorMinor {
@@ -256,6 +271,7 @@ impl<'a> SomeTable<'a> for KindsOfOffsets<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for KindsOfOffsets<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -274,29 +290,40 @@ pub struct KindsOfArraysOfOffsetsMarker {
 }
 
 impl KindsOfArraysOfOffsetsMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn count_byte_range(&self) -> Range<usize> {
+
+    pub fn count_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn nonnullable_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn nonnullable_offsets_byte_range(&self) -> Range<usize> {
         let start = self.count_byte_range().end;
         start..start + self.nonnullable_offsets_byte_len
     }
-    fn nullable_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn nullable_offsets_byte_range(&self) -> Range<usize> {
         let start = self.nonnullable_offsets_byte_range().end;
         start..start + self.nullable_offsets_byte_len
     }
-    fn versioned_nonnullable_offsets_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn versioned_nonnullable_offsets_byte_range(&self) -> Option<Range<usize>> {
         let start = self.versioned_nonnullable_offsets_byte_start?;
         Some(start..start + self.versioned_nonnullable_offsets_byte_len?)
     }
-    fn versioned_nullable_offsets_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn versioned_nullable_offsets_byte_range(&self) -> Option<Range<usize>> {
         let start = self.versioned_nullable_offsets_byte_start?;
         Some(start..start + self.versioned_nullable_offsets_byte_len?)
+    }
+}
+
+impl MinByteRange for KindsOfArraysOfOffsetsMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.nullable_offsets_byte_range().end
     }
 }
 
@@ -350,6 +377,7 @@ impl<'a> FontRead<'a> for KindsOfArraysOfOffsets<'a> {
 
 pub type KindsOfArraysOfOffsets<'a> = TableRef<'a, KindsOfArraysOfOffsetsMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> KindsOfArraysOfOffsets<'a> {
     /// The version
     pub fn version(&self) -> MajorMinor {
@@ -488,6 +516,7 @@ impl<'a> SomeTable<'a> for KindsOfArraysOfOffsets<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for KindsOfArraysOfOffsets<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -506,29 +535,40 @@ pub struct KindsOfArraysMarker {
 }
 
 impl KindsOfArraysMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn count_byte_range(&self) -> Range<usize> {
+
+    pub fn count_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn scalars_byte_range(&self) -> Range<usize> {
+
+    pub fn scalars_byte_range(&self) -> Range<usize> {
         let start = self.count_byte_range().end;
         start..start + self.scalars_byte_len
     }
-    fn records_byte_range(&self) -> Range<usize> {
+
+    pub fn records_byte_range(&self) -> Range<usize> {
         let start = self.scalars_byte_range().end;
         start..start + self.records_byte_len
     }
-    fn versioned_scalars_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn versioned_scalars_byte_range(&self) -> Option<Range<usize>> {
         let start = self.versioned_scalars_byte_start?;
         Some(start..start + self.versioned_scalars_byte_len?)
     }
-    fn versioned_records_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn versioned_records_byte_range(&self) -> Option<Range<usize>> {
         let start = self.versioned_records_byte_start?;
         Some(start..start + self.versioned_records_byte_len?)
+    }
+}
+
+impl MinByteRange for KindsOfArraysMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.records_byte_range().end
     }
 }
 
@@ -582,6 +622,7 @@ impl<'a> FontRead<'a> for KindsOfArrays<'a> {
 
 pub type KindsOfArrays<'a> = TableRef<'a, KindsOfArraysMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> KindsOfArrays<'a> {
     pub fn version(&self) -> u16 {
         let range = self.shape.version_byte_range();
@@ -656,6 +697,7 @@ impl<'a> SomeTable<'a> for KindsOfArrays<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for KindsOfArrays<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -669,17 +711,25 @@ pub struct VarLenHaverMarker {
 }
 
 impl VarLenHaverMarker {
-    fn count_byte_range(&self) -> Range<usize> {
+    pub fn count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn var_len_byte_range(&self) -> Range<usize> {
+
+    pub fn var_len_byte_range(&self) -> Range<usize> {
         let start = self.count_byte_range().end;
         start..start + self.var_len_byte_len
     }
-    fn other_field_byte_range(&self) -> Range<usize> {
+
+    pub fn other_field_byte_range(&self) -> Range<usize> {
         let start = self.var_len_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for VarLenHaverMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.other_field_byte_range().end
     }
 }
 
@@ -699,6 +749,7 @@ impl<'a> FontRead<'a> for VarLenHaver<'a> {
 
 pub type VarLenHaver<'a> = TableRef<'a, VarLenHaverMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> VarLenHaver<'a> {
     pub fn count(&self) -> u16 {
         let range = self.shape.count_byte_range();
@@ -732,6 +783,7 @@ impl<'a> SomeTable<'a> for VarLenHaver<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for VarLenHaver<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -743,13 +795,20 @@ impl<'a> std::fmt::Debug for VarLenHaver<'a> {
 pub struct DummyMarker {}
 
 impl DummyMarker {
-    fn value_byte_range(&self) -> Range<usize> {
+    pub fn value_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn _reserved_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved_byte_range(&self) -> Range<usize> {
         let start = self.value_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for DummyMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self._reserved_byte_range().end
     }
 }
 
@@ -764,6 +823,7 @@ impl<'a> FontRead<'a> for Dummy<'a> {
 
 pub type Dummy<'a> = TableRef<'a, DummyMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Dummy<'a> {
     pub fn value(&self) -> u16 {
         let range = self.shape.value_byte_range();
@@ -785,6 +845,7 @@ impl<'a> SomeTable<'a> for Dummy<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Dummy<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

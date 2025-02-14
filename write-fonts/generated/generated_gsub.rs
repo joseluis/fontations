@@ -87,6 +87,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::Gsub<'a>> for Gsub {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::Gsub<'a>> for Gsub {}
 
 impl<'a> FontRead<'a> for Gsub {
@@ -373,6 +374,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::SingleSubstFormat1<'a>> for Single
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::SingleSubstFormat1<'a>> for SingleSubstFormat1 {}
 
 impl<'a> FontRead<'a> for SingleSubstFormat1 {
@@ -408,7 +410,7 @@ impl FontWrite for SingleSubstFormat2 {
     fn write_into(&self, writer: &mut TableWriter) {
         (2 as u16).write_into(writer);
         self.coverage.write_into(writer);
-        (array_len(&self.substitute_glyph_ids).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.substitute_glyph_ids)).unwrap()).write_into(writer);
         self.substitute_glyph_ids.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -441,6 +443,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::SingleSubstFormat2<'a>> for Single
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::SingleSubstFormat2<'a>> for SingleSubstFormat2 {}
 
 impl<'a> FontRead<'a> for SingleSubstFormat2 {
@@ -477,7 +480,7 @@ impl FontWrite for MultipleSubstFormat1 {
     fn write_into(&self, writer: &mut TableWriter) {
         (1 as u16).write_into(writer);
         self.coverage.write_into(writer);
-        (array_len(&self.sequences).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.sequences)).unwrap()).write_into(writer);
         self.sequences.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -510,6 +513,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::MultipleSubstFormat1<'a>> for Mult
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::MultipleSubstFormat1<'a>> for MultipleSubstFormat1 {}
 
 impl<'a> FontRead<'a> for MultipleSubstFormat1 {
@@ -539,7 +543,7 @@ impl Sequence {
 impl FontWrite for Sequence {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.substitute_glyph_ids).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.substitute_glyph_ids)).unwrap()).write_into(writer);
         self.substitute_glyph_ids.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -568,6 +572,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::Sequence<'a>> for Sequence {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::Sequence<'a>> for Sequence {}
 
 impl<'a> FontRead<'a> for Sequence {
@@ -603,7 +608,7 @@ impl FontWrite for AlternateSubstFormat1 {
     fn write_into(&self, writer: &mut TableWriter) {
         (1 as u16).write_into(writer);
         self.coverage.write_into(writer);
-        (array_len(&self.alternate_sets).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.alternate_sets)).unwrap()).write_into(writer);
         self.alternate_sets.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -639,6 +644,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::AlternateSubstFormat1<'a>> for Alt
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::AlternateSubstFormat1<'a>>
     for AlternateSubstFormat1
 {
@@ -671,7 +677,7 @@ impl AlternateSet {
 impl FontWrite for AlternateSet {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.alternate_glyph_ids).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.alternate_glyph_ids)).unwrap()).write_into(writer);
         self.alternate_glyph_ids.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -700,6 +706,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::AlternateSet<'a>> for AlternateSet
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::AlternateSet<'a>> for AlternateSet {}
 
 impl<'a> FontRead<'a> for AlternateSet {
@@ -735,7 +742,7 @@ impl FontWrite for LigatureSubstFormat1 {
     fn write_into(&self, writer: &mut TableWriter) {
         (1 as u16).write_into(writer);
         self.coverage.write_into(writer);
-        (array_len(&self.ligature_sets).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.ligature_sets)).unwrap()).write_into(writer);
         self.ligature_sets.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -768,6 +775,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::LigatureSubstFormat1<'a>> for Liga
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::LigatureSubstFormat1<'a>> for LigatureSubstFormat1 {}
 
 impl<'a> FontRead<'a> for LigatureSubstFormat1 {
@@ -798,7 +806,7 @@ impl LigatureSet {
 impl FontWrite for LigatureSet {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.ligatures).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.ligatures)).unwrap()).write_into(writer);
         self.ligatures.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -827,6 +835,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::LigatureSet<'a>> for LigatureSet {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::LigatureSet<'a>> for LigatureSet {}
 
 impl<'a> FontRead<'a> for LigatureSet {
@@ -860,7 +869,7 @@ impl FontWrite for Ligature {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         self.ligature_glyph.write_into(writer);
-        (plus_one(&self.component_glyph_ids.len()).unwrap() as u16).write_into(writer);
+        (u16::try_from(plus_one(&self.component_glyph_ids.len())).unwrap()).write_into(writer);
         self.component_glyph_ids.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -882,6 +891,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::Ligature<'a>> for Ligature {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::Ligature<'a>> for Ligature {}
 
 impl<'a> FontRead<'a> for Ligature {
@@ -940,6 +950,7 @@ where
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a, T, U> FromTableRef<read_fonts::tables::gsub::ExtensionSubstFormat1<'a, U>>
     for ExtensionSubstFormat1<T>
 where
@@ -1120,11 +1131,11 @@ impl FontWrite for ReverseChainSingleSubstFormat1 {
     fn write_into(&self, writer: &mut TableWriter) {
         (1 as u16).write_into(writer);
         self.coverage.write_into(writer);
-        (array_len(&self.backtrack_coverages).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.backtrack_coverages)).unwrap()).write_into(writer);
         self.backtrack_coverages.write_into(writer);
-        (array_len(&self.lookahead_coverages).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.lookahead_coverages)).unwrap()).write_into(writer);
         self.lookahead_coverages.write_into(writer);
-        (array_len(&self.substitute_glyph_ids).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.substitute_glyph_ids)).unwrap()).write_into(writer);
         self.substitute_glyph_ids.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -1176,6 +1187,7 @@ impl<'a> FromObjRef<read_fonts::tables::gsub::ReverseChainSingleSubstFormat1<'a>
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gsub::ReverseChainSingleSubstFormat1<'a>>
     for ReverseChainSingleSubstFormat1
 {

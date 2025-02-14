@@ -1,6 +1,6 @@
 [package]
 name = "read-fonts"
-version = "0.23.0"
+version = "0.27.1"
 description = "Reading OpenType font files."
 readme = "README.md"
 categories = ["text-processing", "parsing", "graphics"]
@@ -18,9 +18,15 @@ features = ["libm", "serde", "std"]
 std = ["font-types/std"]
 codegen_test = []
 scaler_test = []
+# experimental support for incremental font transfer (https://www.w3.org/TR/IFT/)
+# code behind this feature does not honor semver and may break at any time.
+ift = []
 # this feature is not stable, but provides untyped traversal of font tables.
 # we do not consider this feature public API for the purposes of semver.
 experimental_traverse = ["std"]
+# Enables experimental implementations of proposed changes to the spec
+# as discussed at https://github.com/harfbuzz/boring-expansion-spec
+spec_next = []
 default = ["std"]
 serde = ["dep:serde", "font-types/serde"]
 libm = ["dep:core_maths"]

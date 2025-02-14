@@ -27,7 +27,7 @@ impl Ift {
         applied_entries_bitmap: Vec<u8>,
         uri_template_length: u16,
         uri_template: Vec<u8>,
-        patch_encoding: u8,
+        patch_format: u8,
     ) -> Self {
         Self::Format1(PatchMapFormat1::new(
             compatibility_id,
@@ -39,14 +39,14 @@ impl Ift {
             applied_entries_bitmap,
             uri_template_length,
             uri_template,
-            patch_encoding,
+            patch_format,
         ))
     }
 
     /// Construct a new `PatchMapFormat2` subtable
     pub fn format_2(
         compatibility_id: CompatibilityId,
-        default_patch_encoding: u8,
+        default_patch_format: u8,
         entry_count: Uint24,
         entries: MappingEntries,
         entry_id_string_data: Option<IdStringData>,
@@ -55,7 +55,7 @@ impl Ift {
     ) -> Self {
         Self::Format2(PatchMapFormat2::new(
             compatibility_id,
-            default_patch_encoding,
+            default_patch_format,
             entry_count,
             entries,
             entry_id_string_data,
@@ -144,7 +144,7 @@ pub struct PatchMapFormat1 {
     pub uri_template_length: u16,
     pub uri_template: Vec<u8>,
     /// Patch format number for patches referenced by this mapping.
-    pub patch_encoding: u8,
+    pub patch_format: u8,
 }
 
 impl PatchMapFormat1 {
@@ -160,7 +160,7 @@ impl PatchMapFormat1 {
         applied_entries_bitmap: Vec<u8>,
         uri_template_length: u16,
         uri_template: Vec<u8>,
-        patch_encoding: u8,
+        patch_format: u8,
     ) -> Self {
         Self {
             compatibility_id,
@@ -172,7 +172,7 @@ impl PatchMapFormat1 {
             applied_entries_bitmap: applied_entries_bitmap.into_iter().map(Into::into).collect(),
             uri_template_length,
             uri_template: uri_template.into_iter().map(Into::into).collect(),
-            patch_encoding,
+            patch_format,
         }
     }
 }
@@ -191,7 +191,7 @@ impl FontWrite for PatchMapFormat1 {
         self.applied_entries_bitmap.write_into(writer);
         self.uri_template_length.write_into(writer);
         self.uri_template.write_into(writer);
-        self.patch_encoding.write_into(writer);
+        self.patch_format.write_into(writer);
     }
     fn table_type(&self) -> TableType {
         TableType::Named("PatchMapFormat1")
@@ -229,11 +229,12 @@ impl<'a> FromObjRef<read_fonts::tables::ift::PatchMapFormat1<'a>> for PatchMapFo
             applied_entries_bitmap: obj.applied_entries_bitmap().to_owned_obj(offset_data),
             uri_template_length: obj.uri_template_length(),
             uri_template: obj.uri_template().to_owned_obj(offset_data),
-            patch_encoding: obj.patch_encoding(),
+            patch_format: obj.patch_format(),
         }
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::PatchMapFormat1<'a>> for PatchMapFormat1 {}
 
 impl<'a> FontRead<'a> for PatchMapFormat1 {
@@ -279,6 +280,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::GlyphMap<'a>> for GlyphMap {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::GlyphMap<'a>> for GlyphMap {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -323,6 +325,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::FeatureMap<'a>> for FeatureMap {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::FeatureMap<'a>> for FeatureMap {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -396,7 +399,7 @@ pub struct PatchMapFormat2 {
     /// Unique ID that identifies compatible patches.
     pub compatibility_id: CompatibilityId,
     /// Patch format number for patches referenced by this mapping.
-    pub default_patch_encoding: u8,
+    pub default_patch_format: u8,
     pub entry_count: Uint24,
     pub entries: OffsetMarker<MappingEntries, WIDTH_32>,
     pub entry_id_string_data: NullableOffsetMarker<IdStringData, WIDTH_32>,
@@ -408,7 +411,7 @@ impl PatchMapFormat2 {
     /// Construct a new `PatchMapFormat2`
     pub fn new(
         compatibility_id: CompatibilityId,
-        default_patch_encoding: u8,
+        default_patch_format: u8,
         entry_count: Uint24,
         entries: MappingEntries,
         entry_id_string_data: Option<IdStringData>,
@@ -417,7 +420,7 @@ impl PatchMapFormat2 {
     ) -> Self {
         Self {
             compatibility_id,
-            default_patch_encoding,
+            default_patch_format,
             entry_count,
             entries: entries.into(),
             entry_id_string_data: entry_id_string_data.into(),
@@ -433,7 +436,7 @@ impl FontWrite for PatchMapFormat2 {
         (2 as u8).write_into(writer);
         (0 as u32).write_into(writer);
         self.compatibility_id.write_into(writer);
-        self.default_patch_encoding.write_into(writer);
+        self.default_patch_format.write_into(writer);
         self.entry_count.write_into(writer);
         self.entries.write_into(writer);
         self.entry_id_string_data.write_into(writer);
@@ -468,7 +471,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::PatchMapFormat2<'a>> for PatchMapFo
         let offset_data = obj.offset_data();
         PatchMapFormat2 {
             compatibility_id: obj.compatibility_id(),
-            default_patch_encoding: obj.default_patch_encoding(),
+            default_patch_format: obj.default_patch_format(),
             entry_count: obj.entry_count(),
             entries: obj.entries().to_owned_table(),
             entry_id_string_data: obj.entry_id_string_data().to_owned_table(),
@@ -478,6 +481,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::PatchMapFormat2<'a>> for PatchMapFo
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::PatchMapFormat2<'a>> for PatchMapFormat2 {}
 
 impl<'a> FontRead<'a> for PatchMapFormat2 {
@@ -524,6 +528,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::MappingEntries<'a>> for MappingEntr
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::MappingEntries<'a>> for MappingEntries {}
 
 impl<'a> FontRead<'a> for MappingEntries {
@@ -541,9 +546,8 @@ pub struct EntryData {
     pub feature_tags: Option<Vec<Tag>>,
     pub design_space_count: Option<u16>,
     pub design_space_segments: Option<Vec<DesignSpaceSegment>>,
-    pub copy_count: Option<u8>,
-    pub copy_indices: Option<Vec<Uint24>>,
-    pub patch_encoding: Option<u8>,
+    pub child_indices: Option<Vec<Uint24>>,
+    pub patch_format: Option<u8>,
     pub codepoint_data: Vec<u8>,
 }
 
@@ -595,25 +599,17 @@ impl FontWrite for EntryData {
                     .write_into(writer)
             });
         self.format_flags
-            .contains(EntryFormatFlags::COPY_INDICES)
+            .contains(EntryFormatFlags::CHILD_INDICES)
             .then(|| {
-                self.copy_count
+                self.child_indices
                     .as_ref()
                     .expect("missing conditional field should have failed validation")
                     .write_into(writer)
             });
         self.format_flags
-            .contains(EntryFormatFlags::COPY_INDICES)
+            .contains(EntryFormatFlags::PATCH_FORMAT)
             .then(|| {
-                self.copy_indices
-                    .as_ref()
-                    .expect("missing conditional field should have failed validation")
-                    .write_into(writer)
-            });
-        self.format_flags
-            .contains(EntryFormatFlags::PATCH_ENCODING)
-            .then(|| {
-                self.patch_encoding
+                self.patch_format
                     .as_ref()
                     .expect("missing conditional field should have failed validation")
                     .write_into(writer)
@@ -694,45 +690,28 @@ impl Validate for EntryData {
                 }
                 self.design_space_segments.validate_impl(ctx);
             });
-            ctx.in_field("copy_count", |ctx| {
-                if !(format_flags.contains(EntryFormatFlags::COPY_INDICES))
-                    && self.copy_count.is_some()
+            ctx.in_field("child_indices", |ctx| {
+                if !(format_flags.contains(EntryFormatFlags::CHILD_INDICES))
+                    && self.child_indices.is_some()
                 {
-                    ctx.report("'copy_count' is present but COPY_INDICES not set")
+                    ctx.report("'child_indices' is present but CHILD_INDICES not set")
                 }
-                if (format_flags.contains(EntryFormatFlags::COPY_INDICES))
-                    && self.copy_count.is_none()
+                if (format_flags.contains(EntryFormatFlags::CHILD_INDICES))
+                    && self.child_indices.is_none()
                 {
-                    ctx.report("COPY_INDICES is set but 'copy_count' is None")
-                }
-            });
-            ctx.in_field("copy_indices", |ctx| {
-                if !(format_flags.contains(EntryFormatFlags::COPY_INDICES))
-                    && self.copy_indices.is_some()
-                {
-                    ctx.report("'copy_indices' is present but COPY_INDICES not set")
-                }
-                if (format_flags.contains(EntryFormatFlags::COPY_INDICES))
-                    && self.copy_indices.is_none()
-                {
-                    ctx.report("COPY_INDICES is set but 'copy_indices' is None")
-                }
-                if self.copy_indices.is_some()
-                    && self.copy_indices.as_ref().unwrap().len() > (u8::MAX as usize)
-                {
-                    ctx.report("array exceeds max length");
+                    ctx.report("CHILD_INDICES is set but 'child_indices' is None")
                 }
             });
-            ctx.in_field("patch_encoding", |ctx| {
-                if !(format_flags.contains(EntryFormatFlags::PATCH_ENCODING))
-                    && self.patch_encoding.is_some()
+            ctx.in_field("patch_format", |ctx| {
+                if !(format_flags.contains(EntryFormatFlags::PATCH_FORMAT))
+                    && self.patch_format.is_some()
                 {
-                    ctx.report("'patch_encoding' is present but PATCH_ENCODING not set")
+                    ctx.report("'patch_format' is present but PATCH_FORMAT not set")
                 }
-                if (format_flags.contains(EntryFormatFlags::PATCH_ENCODING))
-                    && self.patch_encoding.is_none()
+                if (format_flags.contains(EntryFormatFlags::PATCH_FORMAT))
+                    && self.patch_format.is_none()
                 {
-                    ctx.report("PATCH_ENCODING is set but 'patch_encoding' is None")
+                    ctx.report("PATCH_FORMAT is set but 'patch_format' is None")
                 }
             });
         })
@@ -748,14 +727,14 @@ impl<'a> FromObjRef<read_fonts::tables::ift::EntryData<'a>> for EntryData {
             feature_tags: obj.feature_tags().to_owned_obj(offset_data),
             design_space_count: obj.design_space_count(),
             design_space_segments: obj.design_space_segments().to_owned_obj(offset_data),
-            copy_count: obj.copy_count(),
-            copy_indices: obj.copy_indices().to_owned_obj(offset_data),
-            patch_encoding: obj.patch_encoding(),
+            child_indices: obj.child_indices().to_owned_obj(offset_data),
+            patch_format: obj.patch_format(),
             codepoint_data: obj.codepoint_data().to_owned_obj(offset_data),
         }
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::EntryData<'a>> for EntryData {}
 
 impl FontWrite for EntryFormatFlags {
@@ -845,6 +824,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::IdStringData<'a>> for IdStringData 
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::IdStringData<'a>> for IdStringData {}
 
 impl<'a> FontRead<'a> for IdStringData {
@@ -916,6 +896,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::TableKeyedPatch<'a>> for TableKeyed
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::TableKeyedPatch<'a>> for TableKeyedPatch {}
 
 impl<'a> FontRead<'a> for TableKeyedPatch {
@@ -980,6 +961,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::TablePatch<'a>> for TablePatch {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::TablePatch<'a>> for TablePatch {}
 
 impl<'a> FontRead<'a> for TablePatch {
@@ -1056,6 +1038,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::GlyphKeyedPatch<'a>> for GlyphKeyed
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::GlyphKeyedPatch<'a>> for GlyphKeyedPatch {}
 
 impl<'a> FontRead<'a> for GlyphKeyedPatch {
@@ -1138,6 +1121,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::GlyphPatches<'a>> for GlyphPatches 
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::GlyphPatches<'a>> for GlyphPatches {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -1177,6 +1161,7 @@ impl<'a> FromObjRef<read_fonts::tables::ift::GlyphData<'a>> for GlyphData {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::ift::GlyphData<'a>> for GlyphData {}
 
 impl<'a> FontRead<'a> for GlyphData {

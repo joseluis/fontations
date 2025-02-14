@@ -13,21 +13,30 @@ pub struct MajorMinorVersionMarker {
 }
 
 impl MajorMinorVersionMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn always_present_byte_range(&self) -> Range<usize> {
+
+    pub fn always_present_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn if_11_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn if_11_byte_range(&self) -> Option<Range<usize>> {
         let start = self.if_11_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn if_20_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn if_20_byte_range(&self) -> Option<Range<usize>> {
         let start = self.if_20_byte_start?;
         Some(start..start + u32::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for MajorMinorVersionMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.always_present_byte_range().end
     }
 }
 
@@ -59,6 +68,7 @@ impl<'a> FontRead<'a> for MajorMinorVersion<'a> {
 
 pub type MajorMinorVersion<'a> = TableRef<'a, MajorMinorVersionMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> MajorMinorVersion<'a> {
     pub fn version(&self) -> MajorMinor {
         let range = self.shape.version_byte_range();
@@ -103,6 +113,7 @@ impl<'a> SomeTable<'a> for MajorMinorVersion<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for MajorMinorVersion<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -423,25 +434,35 @@ pub struct FlagDayMarker {
 }
 
 impl FlagDayMarker {
-    fn volume_byte_range(&self) -> Range<usize> {
+    pub fn volume_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.volume_byte_range().end;
         start..start + GotFlags::RAW_BYTE_LEN
     }
-    fn foo_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn foo_byte_range(&self) -> Option<Range<usize>> {
         let start = self.foo_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn bar_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn bar_byte_range(&self) -> Option<Range<usize>> {
         let start = self.bar_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn baz_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn baz_byte_range(&self) -> Option<Range<usize>> {
         let start = self.baz_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for FlagDayMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.flags_byte_range().end
     }
 }
 
@@ -481,6 +502,7 @@ impl<'a> FontRead<'a> for FlagDay<'a> {
 
 pub type FlagDay<'a> = TableRef<'a, FlagDayMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FlagDay<'a> {
     pub fn volume(&self) -> u16 {
         let range = self.shape.volume_byte_range();
@@ -529,6 +551,7 @@ impl<'a> SomeTable<'a> for FlagDay<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FlagDay<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -544,30 +567,35 @@ pub struct FieldsAfterConditionalsMarker {
 }
 
 impl FieldsAfterConditionalsMarker {
-    fn flags_byte_range(&self) -> Range<usize> {
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + GotFlags::RAW_BYTE_LEN
     }
-    fn foo_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn foo_byte_range(&self) -> Option<Range<usize>> {
         let start = self.foo_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn always_here_byte_range(&self) -> Range<usize> {
+
+    pub fn always_here_byte_range(&self) -> Range<usize> {
         let start = self
             .foo_byte_range()
             .map(|range| range.end)
             .unwrap_or_else(|| self.flags_byte_range().end);
         start..start + u16::RAW_BYTE_LEN
     }
-    fn bar_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn bar_byte_range(&self) -> Option<Range<usize>> {
         let start = self.bar_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn baz_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn baz_byte_range(&self) -> Option<Range<usize>> {
         let start = self.baz_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn also_always_here_byte_range(&self) -> Range<usize> {
+
+    pub fn also_always_here_byte_range(&self) -> Range<usize> {
         let start = self
             .baz_byte_range()
             .map(|range| range.end)
@@ -578,9 +606,16 @@ impl FieldsAfterConditionalsMarker {
             });
         start..start + u16::RAW_BYTE_LEN
     }
-    fn and_me_too_byte_range(&self) -> Range<usize> {
+
+    pub fn and_me_too_byte_range(&self) -> Range<usize> {
         let start = self.also_always_here_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for FieldsAfterConditionalsMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.and_me_too_byte_range().end
     }
 }
 
@@ -622,6 +657,7 @@ impl<'a> FontRead<'a> for FieldsAfterConditionals<'a> {
 
 pub type FieldsAfterConditionals<'a> = TableRef<'a, FieldsAfterConditionalsMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FieldsAfterConditionals<'a> {
     pub fn flags(&self) -> GotFlags {
         let range = self.shape.flags_byte_range();
@@ -680,6 +716,7 @@ impl<'a> SomeTable<'a> for FieldsAfterConditionals<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FieldsAfterConditionals<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

@@ -17,53 +17,70 @@ pub struct PostMarker {
 }
 
 impl PostMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + Version16Dot16::RAW_BYTE_LEN
     }
-    fn italic_angle_byte_range(&self) -> Range<usize> {
+
+    pub fn italic_angle_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + Fixed::RAW_BYTE_LEN
     }
-    fn underline_position_byte_range(&self) -> Range<usize> {
+
+    pub fn underline_position_byte_range(&self) -> Range<usize> {
         let start = self.italic_angle_byte_range().end;
         start..start + FWord::RAW_BYTE_LEN
     }
-    fn underline_thickness_byte_range(&self) -> Range<usize> {
+
+    pub fn underline_thickness_byte_range(&self) -> Range<usize> {
         let start = self.underline_position_byte_range().end;
         start..start + FWord::RAW_BYTE_LEN
     }
-    fn is_fixed_pitch_byte_range(&self) -> Range<usize> {
+
+    pub fn is_fixed_pitch_byte_range(&self) -> Range<usize> {
         let start = self.underline_thickness_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn min_mem_type42_byte_range(&self) -> Range<usize> {
+
+    pub fn min_mem_type42_byte_range(&self) -> Range<usize> {
         let start = self.is_fixed_pitch_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn max_mem_type42_byte_range(&self) -> Range<usize> {
+
+    pub fn max_mem_type42_byte_range(&self) -> Range<usize> {
         let start = self.min_mem_type42_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn min_mem_type1_byte_range(&self) -> Range<usize> {
+
+    pub fn min_mem_type1_byte_range(&self) -> Range<usize> {
         let start = self.max_mem_type42_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn max_mem_type1_byte_range(&self) -> Range<usize> {
+
+    pub fn max_mem_type1_byte_range(&self) -> Range<usize> {
         let start = self.min_mem_type1_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn num_glyphs_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn num_glyphs_byte_range(&self) -> Option<Range<usize>> {
         let start = self.num_glyphs_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn glyph_name_index_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn glyph_name_index_byte_range(&self) -> Option<Range<usize>> {
         let start = self.glyph_name_index_byte_start?;
         Some(start..start + self.glyph_name_index_byte_len?)
     }
-    fn string_data_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn string_data_byte_range(&self) -> Option<Range<usize>> {
         let start = self.string_data_byte_start?;
         Some(start..start + self.string_data_byte_len?)
+    }
+}
+
+impl MinByteRange for PostMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.max_mem_type1_byte_range().end
     }
 }
 
@@ -92,7 +109,7 @@ impl<'a> FontRead<'a> for Post<'a> {
             .compatible((2u16, 0u16))
             .then(|| cursor.read::<u16>())
             .transpose()?
-            .unwrap_or(0);
+            .unwrap_or_default();
         let glyph_name_index_byte_start = version
             .compatible((2u16, 0u16))
             .then(|| cursor.position())
@@ -128,6 +145,7 @@ impl<'a> FontRead<'a> for Post<'a> {
 /// [post (PostScript)](https://docs.microsoft.com/en-us/typography/opentype/spec/post#header) table
 pub type Post<'a> = TableRef<'a, PostMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Post<'a> {
     /// 0x00010000 for version 1.0 0x00020000 for version 2.0
     /// 0x00025000 for version 2.5 (deprecated) 0x00030000 for version
@@ -255,6 +273,7 @@ impl<'a> SomeTable<'a> for Post<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Post<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

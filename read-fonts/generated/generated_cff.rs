@@ -14,29 +14,40 @@ pub struct CffHeaderMarker {
 }
 
 impl CffHeaderMarker {
-    fn major_byte_range(&self) -> Range<usize> {
+    pub fn major_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn minor_byte_range(&self) -> Range<usize> {
+
+    pub fn minor_byte_range(&self) -> Range<usize> {
         let start = self.major_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn hdr_size_byte_range(&self) -> Range<usize> {
+
+    pub fn hdr_size_byte_range(&self) -> Range<usize> {
         let start = self.minor_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn off_size_byte_range(&self) -> Range<usize> {
+
+    pub fn off_size_byte_range(&self) -> Range<usize> {
         let start = self.hdr_size_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn _padding_byte_range(&self) -> Range<usize> {
+
+    pub fn _padding_byte_range(&self) -> Range<usize> {
         let start = self.off_size_byte_range().end;
         start..start + self._padding_byte_len
     }
-    fn trailing_data_byte_range(&self) -> Range<usize> {
+
+    pub fn trailing_data_byte_range(&self) -> Range<usize> {
         let start = self._padding_byte_range().end;
         start..start + self.trailing_data_byte_len
+    }
+}
+
+impl MinByteRange for CffHeaderMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.trailing_data_byte_range().end
     }
 }
 
@@ -63,6 +74,7 @@ impl<'a> FontRead<'a> for CffHeader<'a> {
 /// [Compact Font Format](https://learn.microsoft.com/en-us/typography/opentype/spec/cff) table header
 pub type CffHeader<'a> = TableRef<'a, CffHeaderMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> CffHeader<'a> {
     /// Format major version (starting at 1).
     pub fn major(&self) -> u8 {
@@ -120,6 +132,7 @@ impl<'a> SomeTable<'a> for CffHeader<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for CffHeader<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

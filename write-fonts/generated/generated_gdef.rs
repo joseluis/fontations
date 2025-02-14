@@ -112,6 +112,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::Gdef<'a>> for Gdef {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::Gdef<'a>> for Gdef {}
 
 impl<'a> FontRead<'a> for Gdef {
@@ -152,7 +153,7 @@ impl FontWrite for AttachList {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         self.coverage.write_into(writer);
-        (array_len(&self.attach_points).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.attach_points)).unwrap()).write_into(writer);
         self.attach_points.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -185,6 +186,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::AttachList<'a>> for AttachList {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::AttachList<'a>> for AttachList {}
 
 impl<'a> FontRead<'a> for AttachList {
@@ -213,7 +215,7 @@ impl AttachPoint {
 impl FontWrite for AttachPoint {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.point_indices).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.point_indices)).unwrap()).write_into(writer);
         self.point_indices.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -242,6 +244,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::AttachPoint<'a>> for AttachPoint {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::AttachPoint<'a>> for AttachPoint {}
 
 impl<'a> FontRead<'a> for AttachPoint {
@@ -275,7 +278,7 @@ impl FontWrite for LigCaretList {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         self.coverage.write_into(writer);
-        (array_len(&self.lig_glyphs).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.lig_glyphs)).unwrap()).write_into(writer);
         self.lig_glyphs.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -308,6 +311,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::LigCaretList<'a>> for LigCaretList
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::LigCaretList<'a>> for LigCaretList {}
 
 impl<'a> FontRead<'a> for LigCaretList {
@@ -337,7 +341,7 @@ impl LigGlyph {
 impl FontWrite for LigGlyph {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.caret_values).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.caret_values)).unwrap()).write_into(writer);
         self.caret_values.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -366,6 +370,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::LigGlyph<'a>> for LigGlyph {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::LigGlyph<'a>> for LigGlyph {}
 
 impl<'a> FontRead<'a> for LigGlyph {
@@ -508,6 +513,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::CaretValueFormat1<'a>> for CaretVa
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::CaretValueFormat1<'a>> for CaretValueFormat1 {}
 
 impl<'a> FontRead<'a> for CaretValueFormat1 {
@@ -557,6 +563,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::CaretValueFormat2<'a>> for CaretVa
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::CaretValueFormat2<'a>> for CaretValueFormat2 {}
 
 impl<'a> FontRead<'a> for CaretValueFormat2 {
@@ -619,6 +626,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::CaretValueFormat3<'a>> for CaretVa
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::CaretValueFormat3<'a>> for CaretValueFormat3 {}
 
 impl<'a> FontRead<'a> for CaretValueFormat3 {
@@ -650,7 +658,7 @@ impl FontWrite for MarkGlyphSets {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         (1 as u16).write_into(writer);
-        (array_len(&self.coverages).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.coverages)).unwrap()).write_into(writer);
         self.coverages.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -679,6 +687,7 @@ impl<'a> FromObjRef<read_fonts::tables::gdef::MarkGlyphSets<'a>> for MarkGlyphSe
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::gdef::MarkGlyphSets<'a>> for MarkGlyphSets {}
 
 impl<'a> FontRead<'a> for MarkGlyphSets {

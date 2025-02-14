@@ -13,29 +13,40 @@ pub struct TableDirectoryMarker {
 }
 
 impl TableDirectoryMarker {
-    fn sfnt_version_byte_range(&self) -> Range<usize> {
+    pub fn sfnt_version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn num_tables_byte_range(&self) -> Range<usize> {
+
+    pub fn num_tables_byte_range(&self) -> Range<usize> {
         let start = self.sfnt_version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn search_range_byte_range(&self) -> Range<usize> {
+
+    pub fn search_range_byte_range(&self) -> Range<usize> {
         let start = self.num_tables_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn entry_selector_byte_range(&self) -> Range<usize> {
+
+    pub fn entry_selector_byte_range(&self) -> Range<usize> {
         let start = self.search_range_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn range_shift_byte_range(&self) -> Range<usize> {
+
+    pub fn range_shift_byte_range(&self) -> Range<usize> {
         let start = self.entry_selector_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn table_records_byte_range(&self) -> Range<usize> {
+
+    pub fn table_records_byte_range(&self) -> Range<usize> {
         let start = self.range_shift_byte_range().end;
         start..start + self.table_records_byte_len
+    }
+}
+
+impl MinByteRange for TableDirectoryMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.table_records_byte_range().end
     }
 }
 
@@ -60,6 +71,7 @@ impl<'a> FontRead<'a> for TableDirectory<'a> {
 /// The OpenType [Table Directory](https://docs.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
 pub type TableDirectory<'a> = TableRef<'a, TableDirectoryMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> TableDirectory<'a> {
     /// 0x00010000 or 0x4F54544F
     pub fn sfnt_version(&self) -> u32 {
@@ -121,6 +133,7 @@ impl<'a> SomeTable<'a> for TableDirectory<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for TableDirectory<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -197,33 +210,45 @@ pub struct TTCHeaderMarker {
 }
 
 impl TTCHeaderMarker {
-    fn ttc_tag_byte_range(&self) -> Range<usize> {
+    pub fn ttc_tag_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + Tag::RAW_BYTE_LEN
     }
-    fn version_byte_range(&self) -> Range<usize> {
+
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = self.ttc_tag_byte_range().end;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn num_fonts_byte_range(&self) -> Range<usize> {
+
+    pub fn num_fonts_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn table_directory_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn table_directory_offsets_byte_range(&self) -> Range<usize> {
         let start = self.num_fonts_byte_range().end;
         start..start + self.table_directory_offsets_byte_len
     }
-    fn dsig_tag_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn dsig_tag_byte_range(&self) -> Option<Range<usize>> {
         let start = self.dsig_tag_byte_start?;
         Some(start..start + u32::RAW_BYTE_LEN)
     }
-    fn dsig_length_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn dsig_length_byte_range(&self) -> Option<Range<usize>> {
         let start = self.dsig_length_byte_start?;
         Some(start..start + u32::RAW_BYTE_LEN)
     }
-    fn dsig_offset_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn dsig_offset_byte_range(&self) -> Option<Range<usize>> {
         let start = self.dsig_offset_byte_start?;
         Some(start..start + u32::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for TTCHeaderMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.table_directory_offsets_byte_range().end
     }
 }
 
@@ -270,6 +295,7 @@ impl<'a> FontRead<'a> for TTCHeader<'a> {
 /// [TTC Header](https://learn.microsoft.com/en-us/typography/opentype/spec/otff#ttc-header)
 pub type TTCHeader<'a> = TableRef<'a, TTCHeaderMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> TTCHeader<'a> {
     /// Font Collection ID string: \"ttcf\"
     pub fn ttc_tag(&self) -> Tag {
@@ -344,6 +370,7 @@ impl<'a> SomeTable<'a> for TTCHeader<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for TTCHeader<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

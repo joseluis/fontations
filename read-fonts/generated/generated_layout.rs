@@ -13,13 +13,20 @@ pub struct ScriptListMarker {
 }
 
 impl ScriptListMarker {
-    fn script_count_byte_range(&self) -> Range<usize> {
+    pub fn script_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn script_records_byte_range(&self) -> Range<usize> {
+
+    pub fn script_records_byte_range(&self) -> Range<usize> {
         let start = self.script_count_byte_range().end;
         start..start + self.script_records_byte_len
+    }
+}
+
+impl MinByteRange for ScriptListMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.script_records_byte_range().end
     }
 }
 
@@ -40,6 +47,7 @@ impl<'a> FontRead<'a> for ScriptList<'a> {
 /// [Script List Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#script-list-table-and-script-record)
 pub type ScriptList<'a> = TableRef<'a, ScriptListMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ScriptList<'a> {
     /// Number of ScriptRecords
     pub fn script_count(&self) -> u16 {
@@ -76,6 +84,7 @@ impl<'a> SomeTable<'a> for ScriptList<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ScriptList<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -143,17 +152,25 @@ pub struct ScriptMarker {
 }
 
 impl ScriptMarker {
-    fn default_lang_sys_offset_byte_range(&self) -> Range<usize> {
+    pub fn default_lang_sys_offset_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn lang_sys_count_byte_range(&self) -> Range<usize> {
+
+    pub fn lang_sys_count_byte_range(&self) -> Range<usize> {
         let start = self.default_lang_sys_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lang_sys_records_byte_range(&self) -> Range<usize> {
+
+    pub fn lang_sys_records_byte_range(&self) -> Range<usize> {
         let start = self.lang_sys_count_byte_range().end;
         start..start + self.lang_sys_records_byte_len
+    }
+}
+
+impl MinByteRange for ScriptMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.lang_sys_records_byte_range().end
     }
 }
 
@@ -175,6 +192,7 @@ impl<'a> FontRead<'a> for Script<'a> {
 /// [Script Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#script-table-and-language-system-record)
 pub type Script<'a> = TableRef<'a, ScriptMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Script<'a> {
     /// Offset to default LangSys table, from beginning of Script table
     /// — may be NULL
@@ -229,6 +247,7 @@ impl<'a> SomeTable<'a> for Script<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Script<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -295,21 +314,30 @@ pub struct LangSysMarker {
 }
 
 impl LangSysMarker {
-    fn lookup_order_offset_byte_range(&self) -> Range<usize> {
+    pub fn lookup_order_offset_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn required_feature_index_byte_range(&self) -> Range<usize> {
+
+    pub fn required_feature_index_byte_range(&self) -> Range<usize> {
         let start = self.lookup_order_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn feature_index_count_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_index_count_byte_range(&self) -> Range<usize> {
         let start = self.required_feature_index_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn feature_indices_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_indices_byte_range(&self) -> Range<usize> {
         let start = self.feature_index_count_byte_range().end;
         start..start + self.feature_indices_byte_len
+    }
+}
+
+impl MinByteRange for LangSysMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.feature_indices_byte_range().end
     }
 }
 
@@ -332,6 +360,7 @@ impl<'a> FontRead<'a> for LangSys<'a> {
 /// [Language System Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#language-system-table)
 pub type LangSys<'a> = TableRef<'a, LangSysMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> LangSys<'a> {
     /// Index of a feature required for this language system; if no
     /// required features = 0xFFFF
@@ -376,6 +405,7 @@ impl<'a> SomeTable<'a> for LangSys<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for LangSys<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -390,13 +420,20 @@ pub struct FeatureListMarker {
 }
 
 impl FeatureListMarker {
-    fn feature_count_byte_range(&self) -> Range<usize> {
+    pub fn feature_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn feature_records_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_records_byte_range(&self) -> Range<usize> {
         let start = self.feature_count_byte_range().end;
         start..start + self.feature_records_byte_len
+    }
+}
+
+impl MinByteRange for FeatureListMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.feature_records_byte_range().end
     }
 }
 
@@ -417,6 +454,7 @@ impl<'a> FontRead<'a> for FeatureList<'a> {
 /// [Feature List Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#feature-list-table)
 pub type FeatureList<'a> = TableRef<'a, FeatureListMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FeatureList<'a> {
     /// Number of FeatureRecords in this table
     pub fn feature_count(&self) -> u16 {
@@ -454,6 +492,7 @@ impl<'a> SomeTable<'a> for FeatureList<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FeatureList<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -523,17 +562,25 @@ pub struct FeatureMarker {
 }
 
 impl FeatureMarker {
-    fn feature_params_offset_byte_range(&self) -> Range<usize> {
+    pub fn feature_params_offset_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn lookup_index_count_byte_range(&self) -> Range<usize> {
+
+    pub fn lookup_index_count_byte_range(&self) -> Range<usize> {
         let start = self.feature_params_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lookup_list_indices_byte_range(&self) -> Range<usize> {
+
+    pub fn lookup_list_indices_byte_range(&self) -> Range<usize> {
         let start = self.lookup_index_count_byte_range().end;
         start..start + self.lookup_list_indices_byte_len
+    }
+}
+
+impl MinByteRange for FeatureMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.lookup_list_indices_byte_range().end
     }
 }
 
@@ -572,6 +619,7 @@ impl<'a> Feature<'a> {
 /// [Feature Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#feature-table)
 pub type Feature<'a> = TableRef<'a, FeatureMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Feature<'a> {
     /// Offset from start of Feature table to FeatureParams table, if defined for the feature and present, else NULL
     pub fn feature_params_offset(&self) -> Nullable<Offset16> {
@@ -626,6 +674,7 @@ impl<'a> SomeTable<'a> for Feature<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Feature<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -641,13 +690,20 @@ pub struct LookupListMarker<T = ()> {
 }
 
 impl<T> LookupListMarker<T> {
-    fn lookup_count_byte_range(&self) -> Range<usize> {
+    pub fn lookup_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lookup_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn lookup_offsets_byte_range(&self) -> Range<usize> {
         let start = self.lookup_count_byte_range().end;
         start..start + self.lookup_offsets_byte_len
+    }
+}
+
+impl MinByteRange for LookupListMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.lookup_offsets_byte_range().end
     }
 }
 
@@ -706,6 +762,7 @@ impl<'a, T> LookupList<'a, T> {
 /// [Lookup List Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#lookup-list-table)
 pub type LookupList<'a, T> = TableRef<'a, LookupListMarker<T>>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a, T> LookupList<'a, T> {
     /// Number of lookups in this table
     pub fn lookup_count(&self) -> u16 {
@@ -759,6 +816,7 @@ impl<'a, T: FontRead<'a> + SomeTable<'a> + 'a> SomeTable<'a> for LookupList<'a, 
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a, T: FontRead<'a> + SomeTable<'a> + 'a> std::fmt::Debug for LookupList<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -775,25 +833,35 @@ pub struct LookupMarker<T = ()> {
 }
 
 impl<T> LookupMarker<T> {
-    fn lookup_type_byte_range(&self) -> Range<usize> {
+    pub fn lookup_type_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lookup_flag_byte_range(&self) -> Range<usize> {
+
+    pub fn lookup_flag_byte_range(&self) -> Range<usize> {
         let start = self.lookup_type_byte_range().end;
         start..start + LookupFlag::RAW_BYTE_LEN
     }
-    fn sub_table_count_byte_range(&self) -> Range<usize> {
+
+    pub fn sub_table_count_byte_range(&self) -> Range<usize> {
         let start = self.lookup_flag_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn subtable_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn subtable_offsets_byte_range(&self) -> Range<usize> {
         let start = self.sub_table_count_byte_range().end;
         start..start + self.subtable_offsets_byte_len
     }
-    fn mark_filtering_set_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn mark_filtering_set_byte_range(&self) -> Option<Range<usize>> {
         let start = self.mark_filtering_set_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for LookupMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.subtable_offsets_byte_range().end
     }
 }
 
@@ -864,6 +932,7 @@ impl<'a, T> Lookup<'a, T> {
 /// [Lookup Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#lookup-table)
 pub type Lookup<'a, T> = TableRef<'a, LookupMarker<T>>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a, T> Lookup<'a, T> {
     /// Different enumerations for GSUB and GPOS
     pub fn lookup_type(&self) -> u16 {
@@ -944,6 +1013,7 @@ impl<'a, T: FontRead<'a> + SomeTable<'a> + 'a> SomeTable<'a> for Lookup<'a, T> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a, T: FontRead<'a> + SomeTable<'a> + 'a> std::fmt::Debug for Lookup<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -962,17 +1032,25 @@ pub struct CoverageFormat1Marker {
 }
 
 impl CoverageFormat1Marker {
-    fn coverage_format_byte_range(&self) -> Range<usize> {
+    pub fn coverage_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn glyph_array_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_array_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + self.glyph_array_byte_len
+    }
+}
+
+impl MinByteRange for CoverageFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.glyph_array_byte_range().end
     }
 }
 
@@ -994,6 +1072,7 @@ impl<'a> FontRead<'a> for CoverageFormat1<'a> {
 /// [Coverage Format 1](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#coverage-format-1)
 pub type CoverageFormat1<'a> = TableRef<'a, CoverageFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> CoverageFormat1<'a> {
     /// Format identifier — format = 1
     pub fn coverage_format(&self) -> u16 {
@@ -1030,6 +1109,7 @@ impl<'a> SomeTable<'a> for CoverageFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for CoverageFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1048,17 +1128,25 @@ pub struct CoverageFormat2Marker {
 }
 
 impl CoverageFormat2Marker {
-    fn coverage_format_byte_range(&self) -> Range<usize> {
+    pub fn coverage_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn range_count_byte_range(&self) -> Range<usize> {
+
+    pub fn range_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn range_records_byte_range(&self) -> Range<usize> {
+
+    pub fn range_records_byte_range(&self) -> Range<usize> {
         let start = self.range_count_byte_range().end;
         start..start + self.range_records_byte_len
+    }
+}
+
+impl MinByteRange for CoverageFormat2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.range_records_byte_range().end
     }
 }
 
@@ -1080,6 +1168,7 @@ impl<'a> FontRead<'a> for CoverageFormat2<'a> {
 /// [Coverage Format 2](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#coverage-format-2)
 pub type CoverageFormat2<'a> = TableRef<'a, CoverageFormat2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> CoverageFormat2<'a> {
     /// Format identifier — format = 2
     pub fn coverage_format(&self) -> u16 {
@@ -1123,6 +1212,7 @@ impl<'a> SomeTable<'a> for CoverageFormat2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for CoverageFormat2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1219,6 +1309,15 @@ impl<'a> FontRead<'a> for CoverageTable<'a> {
     }
 }
 
+impl MinByteRange for CoverageTable<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1(item) => item.min_byte_range(),
+            Self::Format2(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> CoverageTable<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -1230,7 +1329,7 @@ impl<'a> CoverageTable<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for CoverageTable<'a> {
+impl std::fmt::Debug for CoverageTable<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -1258,21 +1357,30 @@ pub struct ClassDefFormat1Marker {
 }
 
 impl ClassDefFormat1Marker {
-    fn class_format_byte_range(&self) -> Range<usize> {
+    pub fn class_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn start_glyph_id_byte_range(&self) -> Range<usize> {
+
+    pub fn start_glyph_id_byte_range(&self) -> Range<usize> {
         let start = self.class_format_byte_range().end;
         start..start + GlyphId16::RAW_BYTE_LEN
     }
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.start_glyph_id_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn class_value_array_byte_range(&self) -> Range<usize> {
+
+    pub fn class_value_array_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + self.class_value_array_byte_len
+    }
+}
+
+impl MinByteRange for ClassDefFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.class_value_array_byte_range().end
     }
 }
 
@@ -1295,6 +1403,7 @@ impl<'a> FontRead<'a> for ClassDefFormat1<'a> {
 /// [Class Definition Table Format 1](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#class-definition-table-format-1)
 pub type ClassDefFormat1<'a> = TableRef<'a, ClassDefFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ClassDefFormat1<'a> {
     /// Format identifier — format = 1
     pub fn class_format(&self) -> u16 {
@@ -1338,6 +1447,7 @@ impl<'a> SomeTable<'a> for ClassDefFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ClassDefFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1356,17 +1466,25 @@ pub struct ClassDefFormat2Marker {
 }
 
 impl ClassDefFormat2Marker {
-    fn class_format_byte_range(&self) -> Range<usize> {
+    pub fn class_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn class_range_count_byte_range(&self) -> Range<usize> {
+
+    pub fn class_range_count_byte_range(&self) -> Range<usize> {
         let start = self.class_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn class_range_records_byte_range(&self) -> Range<usize> {
+
+    pub fn class_range_records_byte_range(&self) -> Range<usize> {
         let start = self.class_range_count_byte_range().end;
         start..start + self.class_range_records_byte_len
+    }
+}
+
+impl MinByteRange for ClassDefFormat2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.class_range_records_byte_range().end
     }
 }
 
@@ -1388,6 +1506,7 @@ impl<'a> FontRead<'a> for ClassDefFormat2<'a> {
 /// [Class Definition Table Format 2](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#class-definition-table-format-2)
 pub type ClassDefFormat2<'a> = TableRef<'a, ClassDefFormat2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ClassDefFormat2<'a> {
     /// Format identifier — format = 2
     pub fn class_format(&self) -> u16 {
@@ -1431,6 +1550,7 @@ impl<'a> SomeTable<'a> for ClassDefFormat2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ClassDefFormat2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1524,6 +1644,15 @@ impl<'a> FontRead<'a> for ClassDef<'a> {
     }
 }
 
+impl MinByteRange for ClassDef<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1(item) => item.min_byte_range(),
+            Self::Format2(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> ClassDef<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -1535,7 +1664,7 @@ impl<'a> ClassDef<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for ClassDef<'a> {
+impl std::fmt::Debug for ClassDef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -1605,21 +1734,30 @@ pub struct SequenceContextFormat1Marker {
 }
 
 impl SequenceContextFormat1Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn seq_rule_set_count_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_rule_set_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn seq_rule_set_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_rule_set_offsets_byte_range(&self) -> Range<usize> {
         let start = self.seq_rule_set_count_byte_range().end;
         start..start + self.seq_rule_set_offsets_byte_len
+    }
+}
+
+impl MinByteRange for SequenceContextFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.seq_rule_set_offsets_byte_range().end
     }
 }
 
@@ -1642,6 +1780,7 @@ impl<'a> FontRead<'a> for SequenceContextFormat1<'a> {
 /// [Sequence Context Format 1](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#sequence-context-format-1-simple-glyph-contexts)
 pub type SequenceContextFormat1<'a> = TableRef<'a, SequenceContextFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SequenceContextFormat1<'a> {
     /// Format identifier: format = 1
     pub fn format(&self) -> u16 {
@@ -1716,6 +1855,7 @@ impl<'a> SomeTable<'a> for SequenceContextFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SequenceContextFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1730,13 +1870,20 @@ pub struct SequenceRuleSetMarker {
 }
 
 impl SequenceRuleSetMarker {
-    fn seq_rule_count_byte_range(&self) -> Range<usize> {
+    pub fn seq_rule_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn seq_rule_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_rule_offsets_byte_range(&self) -> Range<usize> {
         let start = self.seq_rule_count_byte_range().end;
         start..start + self.seq_rule_offsets_byte_len
+    }
+}
+
+impl MinByteRange for SequenceRuleSetMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.seq_rule_offsets_byte_range().end
     }
 }
 
@@ -1757,6 +1904,7 @@ impl<'a> FontRead<'a> for SequenceRuleSet<'a> {
 /// Part of [SequenceContextFormat1]
 pub type SequenceRuleSet<'a> = TableRef<'a, SequenceRuleSetMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SequenceRuleSet<'a> {
     /// Number of SequenceRule tables
     pub fn seq_rule_count(&self) -> u16 {
@@ -1807,6 +1955,7 @@ impl<'a> SomeTable<'a> for SequenceRuleSet<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SequenceRuleSet<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1822,21 +1971,30 @@ pub struct SequenceRuleMarker {
 }
 
 impl SequenceRuleMarker {
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn seq_lookup_count_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_count_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn input_sequence_byte_range(&self) -> Range<usize> {
+
+    pub fn input_sequence_byte_range(&self) -> Range<usize> {
         let start = self.seq_lookup_count_byte_range().end;
         start..start + self.input_sequence_byte_len
     }
-    fn seq_lookup_records_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_records_byte_range(&self) -> Range<usize> {
         let start = self.input_sequence_byte_range().end;
         start..start + self.seq_lookup_records_byte_len
+    }
+}
+
+impl MinByteRange for SequenceRuleMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.seq_lookup_records_byte_range().end
     }
 }
 
@@ -1863,6 +2021,7 @@ impl<'a> FontRead<'a> for SequenceRule<'a> {
 /// Part of [SequenceContextFormat1]
 pub type SequenceRule<'a> = TableRef<'a, SequenceRuleMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SequenceRule<'a> {
     /// Number of glyphs in the input glyph sequence
     pub fn glyph_count(&self) -> u16 {
@@ -1913,6 +2072,7 @@ impl<'a> SomeTable<'a> for SequenceRule<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SequenceRule<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1931,25 +2091,35 @@ pub struct SequenceContextFormat2Marker {
 }
 
 impl SequenceContextFormat2Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn class_def_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn class_def_offset_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn class_seq_rule_set_count_byte_range(&self) -> Range<usize> {
+
+    pub fn class_seq_rule_set_count_byte_range(&self) -> Range<usize> {
         let start = self.class_def_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn class_seq_rule_set_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn class_seq_rule_set_offsets_byte_range(&self) -> Range<usize> {
         let start = self.class_seq_rule_set_count_byte_range().end;
         start..start + self.class_seq_rule_set_offsets_byte_len
+    }
+}
+
+impl MinByteRange for SequenceContextFormat2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.class_seq_rule_set_offsets_byte_range().end
     }
 }
 
@@ -1973,6 +2143,7 @@ impl<'a> FontRead<'a> for SequenceContextFormat2<'a> {
 /// [Sequence Context Format 2](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#sequence-context-format-2-class-based-glyph-contexts)
 pub type SequenceContextFormat2<'a> = TableRef<'a, SequenceContextFormat2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SequenceContextFormat2<'a> {
     /// Format identifier: format = 2
     pub fn format(&self) -> u16 {
@@ -2069,6 +2240,7 @@ impl<'a> SomeTable<'a> for SequenceContextFormat2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SequenceContextFormat2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2083,13 +2255,20 @@ pub struct ClassSequenceRuleSetMarker {
 }
 
 impl ClassSequenceRuleSetMarker {
-    fn class_seq_rule_count_byte_range(&self) -> Range<usize> {
+    pub fn class_seq_rule_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn class_seq_rule_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn class_seq_rule_offsets_byte_range(&self) -> Range<usize> {
         let start = self.class_seq_rule_count_byte_range().end;
         start..start + self.class_seq_rule_offsets_byte_len
+    }
+}
+
+impl MinByteRange for ClassSequenceRuleSetMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.class_seq_rule_offsets_byte_range().end
     }
 }
 
@@ -2110,6 +2289,7 @@ impl<'a> FontRead<'a> for ClassSequenceRuleSet<'a> {
 /// Part of [SequenceContextFormat2]
 pub type ClassSequenceRuleSet<'a> = TableRef<'a, ClassSequenceRuleSetMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ClassSequenceRuleSet<'a> {
     /// Number of ClassSequenceRule tables
     pub fn class_seq_rule_count(&self) -> u16 {
@@ -2163,6 +2343,7 @@ impl<'a> SomeTable<'a> for ClassSequenceRuleSet<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ClassSequenceRuleSet<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2178,21 +2359,30 @@ pub struct ClassSequenceRuleMarker {
 }
 
 impl ClassSequenceRuleMarker {
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn seq_lookup_count_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_count_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn input_sequence_byte_range(&self) -> Range<usize> {
+
+    pub fn input_sequence_byte_range(&self) -> Range<usize> {
         let start = self.seq_lookup_count_byte_range().end;
         start..start + self.input_sequence_byte_len
     }
-    fn seq_lookup_records_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_records_byte_range(&self) -> Range<usize> {
         let start = self.input_sequence_byte_range().end;
         start..start + self.seq_lookup_records_byte_len
+    }
+}
+
+impl MinByteRange for ClassSequenceRuleMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.seq_lookup_records_byte_range().end
     }
 }
 
@@ -2219,6 +2409,7 @@ impl<'a> FontRead<'a> for ClassSequenceRule<'a> {
 /// Part of [SequenceContextFormat2]
 pub type ClassSequenceRule<'a> = TableRef<'a, ClassSequenceRuleMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ClassSequenceRule<'a> {
     /// Number of glyphs to be matched
     pub fn glyph_count(&self) -> u16 {
@@ -2270,6 +2461,7 @@ impl<'a> SomeTable<'a> for ClassSequenceRule<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ClassSequenceRule<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2289,25 +2481,35 @@ pub struct SequenceContextFormat3Marker {
 }
 
 impl SequenceContextFormat3Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn seq_lookup_count_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_count_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offsets_byte_range(&self) -> Range<usize> {
         let start = self.seq_lookup_count_byte_range().end;
         start..start + self.coverage_offsets_byte_len
     }
-    fn seq_lookup_records_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_records_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offsets_byte_range().end;
         start..start + self.seq_lookup_records_byte_len
+    }
+}
+
+impl MinByteRange for SequenceContextFormat3Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.seq_lookup_records_byte_range().end
     }
 }
 
@@ -2335,6 +2537,7 @@ impl<'a> FontRead<'a> for SequenceContextFormat3<'a> {
 /// [Sequence Context Format 3](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#sequence-context-format-3-coverage-based-glyph-contexts)
 pub type SequenceContextFormat3<'a> = TableRef<'a, SequenceContextFormat3Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SequenceContextFormat3<'a> {
     /// Format identifier: format = 3
     pub fn format(&self) -> u16 {
@@ -2413,6 +2616,7 @@ impl<'a> SomeTable<'a> for SequenceContextFormat3<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SequenceContextFormat3<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2458,6 +2662,16 @@ impl<'a> FontRead<'a> for SequenceContext<'a> {
     }
 }
 
+impl MinByteRange for SequenceContext<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1(item) => item.min_byte_range(),
+            Self::Format2(item) => item.min_byte_range(),
+            Self::Format3(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> SequenceContext<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -2470,7 +2684,7 @@ impl<'a> SequenceContext<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for SequenceContext<'a> {
+impl std::fmt::Debug for SequenceContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -2498,21 +2712,30 @@ pub struct ChainedSequenceContextFormat1Marker {
 }
 
 impl ChainedSequenceContextFormat1Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn chained_seq_rule_set_count_byte_range(&self) -> Range<usize> {
+
+    pub fn chained_seq_rule_set_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn chained_seq_rule_set_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn chained_seq_rule_set_offsets_byte_range(&self) -> Range<usize> {
         let start = self.chained_seq_rule_set_count_byte_range().end;
         start..start + self.chained_seq_rule_set_offsets_byte_len
+    }
+}
+
+impl MinByteRange for ChainedSequenceContextFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.chained_seq_rule_set_offsets_byte_range().end
     }
 }
 
@@ -2535,6 +2758,7 @@ impl<'a> FontRead<'a> for ChainedSequenceContextFormat1<'a> {
 /// [Chained Sequence Context Format 1](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#chained-sequence-context-format-1-simple-glyph-contexts)
 pub type ChainedSequenceContextFormat1<'a> = TableRef<'a, ChainedSequenceContextFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ChainedSequenceContextFormat1<'a> {
     /// Format identifier: format = 1
     pub fn format(&self) -> u16 {
@@ -2614,6 +2838,7 @@ impl<'a> SomeTable<'a> for ChainedSequenceContextFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ChainedSequenceContextFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2628,13 +2853,20 @@ pub struct ChainedSequenceRuleSetMarker {
 }
 
 impl ChainedSequenceRuleSetMarker {
-    fn chained_seq_rule_count_byte_range(&self) -> Range<usize> {
+    pub fn chained_seq_rule_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn chained_seq_rule_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn chained_seq_rule_offsets_byte_range(&self) -> Range<usize> {
         let start = self.chained_seq_rule_count_byte_range().end;
         start..start + self.chained_seq_rule_offsets_byte_len
+    }
+}
+
+impl MinByteRange for ChainedSequenceRuleSetMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.chained_seq_rule_offsets_byte_range().end
     }
 }
 
@@ -2655,6 +2887,7 @@ impl<'a> FontRead<'a> for ChainedSequenceRuleSet<'a> {
 /// Part of [ChainedSequenceContextFormat1]
 pub type ChainedSequenceRuleSet<'a> = TableRef<'a, ChainedSequenceRuleSetMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ChainedSequenceRuleSet<'a> {
     /// Number of ChainedSequenceRule tables
     pub fn chained_seq_rule_count(&self) -> u16 {
@@ -2708,6 +2941,7 @@ impl<'a> SomeTable<'a> for ChainedSequenceRuleSet<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ChainedSequenceRuleSet<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2725,37 +2959,50 @@ pub struct ChainedSequenceRuleMarker {
 }
 
 impl ChainedSequenceRuleMarker {
-    fn backtrack_glyph_count_byte_range(&self) -> Range<usize> {
+    pub fn backtrack_glyph_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn backtrack_sequence_byte_range(&self) -> Range<usize> {
+
+    pub fn backtrack_sequence_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_glyph_count_byte_range().end;
         start..start + self.backtrack_sequence_byte_len
     }
-    fn input_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn input_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_sequence_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn input_sequence_byte_range(&self) -> Range<usize> {
+
+    pub fn input_sequence_byte_range(&self) -> Range<usize> {
         let start = self.input_glyph_count_byte_range().end;
         start..start + self.input_sequence_byte_len
     }
-    fn lookahead_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.input_sequence_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lookahead_sequence_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_sequence_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_glyph_count_byte_range().end;
         start..start + self.lookahead_sequence_byte_len
     }
-    fn seq_lookup_count_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_count_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_sequence_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn seq_lookup_records_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_records_byte_range(&self) -> Range<usize> {
         let start = self.seq_lookup_count_byte_range().end;
         start..start + self.seq_lookup_records_byte_len
+    }
+}
+
+impl MinByteRange for ChainedSequenceRuleMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.seq_lookup_records_byte_range().end
     }
 }
 
@@ -2794,6 +3041,7 @@ impl<'a> FontRead<'a> for ChainedSequenceRule<'a> {
 /// Part of [ChainedSequenceContextFormat1]
 pub type ChainedSequenceRule<'a> = TableRef<'a, ChainedSequenceRuleMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ChainedSequenceRule<'a> {
     /// Number of glyphs in the backtrack sequence
     pub fn backtrack_glyph_count(&self) -> u16 {
@@ -2878,6 +3126,7 @@ impl<'a> SomeTable<'a> for ChainedSequenceRule<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ChainedSequenceRule<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -2896,33 +3145,45 @@ pub struct ChainedSequenceContextFormat2Marker {
 }
 
 impl ChainedSequenceContextFormat2Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn backtrack_class_def_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn backtrack_class_def_offset_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn input_class_def_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn input_class_def_offset_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_class_def_offset_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn lookahead_class_def_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_class_def_offset_byte_range(&self) -> Range<usize> {
         let start = self.input_class_def_offset_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn chained_class_seq_rule_set_count_byte_range(&self) -> Range<usize> {
+
+    pub fn chained_class_seq_rule_set_count_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_class_def_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn chained_class_seq_rule_set_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn chained_class_seq_rule_set_offsets_byte_range(&self) -> Range<usize> {
         let start = self.chained_class_seq_rule_set_count_byte_range().end;
         start..start + self.chained_class_seq_rule_set_offsets_byte_len
+    }
+}
+
+impl MinByteRange for ChainedSequenceContextFormat2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.chained_class_seq_rule_set_offsets_byte_range().end
     }
 }
 
@@ -2949,6 +3210,7 @@ impl<'a> FontRead<'a> for ChainedSequenceContextFormat2<'a> {
 /// [Chained Sequence Context Format 2](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#chained-sequence-context-format-2-class-based-glyph-contexts)
 pub type ChainedSequenceContextFormat2<'a> = TableRef<'a, ChainedSequenceContextFormat2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ChainedSequenceContextFormat2<'a> {
     /// Format identifier: format = 2
     pub fn format(&self) -> u16 {
@@ -3085,6 +3347,7 @@ impl<'a> SomeTable<'a> for ChainedSequenceContextFormat2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ChainedSequenceContextFormat2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -3099,13 +3362,20 @@ pub struct ChainedClassSequenceRuleSetMarker {
 }
 
 impl ChainedClassSequenceRuleSetMarker {
-    fn chained_class_seq_rule_count_byte_range(&self) -> Range<usize> {
+    pub fn chained_class_seq_rule_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn chained_class_seq_rule_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn chained_class_seq_rule_offsets_byte_range(&self) -> Range<usize> {
         let start = self.chained_class_seq_rule_count_byte_range().end;
         start..start + self.chained_class_seq_rule_offsets_byte_len
+    }
+}
+
+impl MinByteRange for ChainedClassSequenceRuleSetMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.chained_class_seq_rule_offsets_byte_range().end
     }
 }
 
@@ -3126,6 +3396,7 @@ impl<'a> FontRead<'a> for ChainedClassSequenceRuleSet<'a> {
 /// Part of [ChainedSequenceContextFormat2]
 pub type ChainedClassSequenceRuleSet<'a> = TableRef<'a, ChainedClassSequenceRuleSetMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ChainedClassSequenceRuleSet<'a> {
     /// Number of ChainedClassSequenceRule tables
     pub fn chained_class_seq_rule_count(&self) -> u16 {
@@ -3181,6 +3452,7 @@ impl<'a> SomeTable<'a> for ChainedClassSequenceRuleSet<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ChainedClassSequenceRuleSet<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -3198,37 +3470,50 @@ pub struct ChainedClassSequenceRuleMarker {
 }
 
 impl ChainedClassSequenceRuleMarker {
-    fn backtrack_glyph_count_byte_range(&self) -> Range<usize> {
+    pub fn backtrack_glyph_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn backtrack_sequence_byte_range(&self) -> Range<usize> {
+
+    pub fn backtrack_sequence_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_glyph_count_byte_range().end;
         start..start + self.backtrack_sequence_byte_len
     }
-    fn input_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn input_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_sequence_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn input_sequence_byte_range(&self) -> Range<usize> {
+
+    pub fn input_sequence_byte_range(&self) -> Range<usize> {
         let start = self.input_glyph_count_byte_range().end;
         start..start + self.input_sequence_byte_len
     }
-    fn lookahead_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.input_sequence_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lookahead_sequence_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_sequence_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_glyph_count_byte_range().end;
         start..start + self.lookahead_sequence_byte_len
     }
-    fn seq_lookup_count_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_count_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_sequence_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn seq_lookup_records_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_records_byte_range(&self) -> Range<usize> {
         let start = self.seq_lookup_count_byte_range().end;
         start..start + self.seq_lookup_records_byte_len
+    }
+}
+
+impl MinByteRange for ChainedClassSequenceRuleMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.seq_lookup_records_byte_range().end
     }
 }
 
@@ -3267,6 +3552,7 @@ impl<'a> FontRead<'a> for ChainedClassSequenceRule<'a> {
 /// Part of [ChainedSequenceContextFormat2]
 pub type ChainedClassSequenceRule<'a> = TableRef<'a, ChainedClassSequenceRuleMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ChainedClassSequenceRule<'a> {
     /// Number of glyphs in the backtrack sequence
     pub fn backtrack_glyph_count(&self) -> u16 {
@@ -3352,6 +3638,7 @@ impl<'a> SomeTable<'a> for ChainedClassSequenceRule<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ChainedClassSequenceRule<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -3373,41 +3660,55 @@ pub struct ChainedSequenceContextFormat3Marker {
 }
 
 impl ChainedSequenceContextFormat3Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn backtrack_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn backtrack_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn backtrack_coverage_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn backtrack_coverage_offsets_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_glyph_count_byte_range().end;
         start..start + self.backtrack_coverage_offsets_byte_len
     }
-    fn input_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn input_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_coverage_offsets_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn input_coverage_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn input_coverage_offsets_byte_range(&self) -> Range<usize> {
         let start = self.input_glyph_count_byte_range().end;
         start..start + self.input_coverage_offsets_byte_len
     }
-    fn lookahead_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.input_coverage_offsets_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lookahead_coverage_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_coverage_offsets_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_glyph_count_byte_range().end;
         start..start + self.lookahead_coverage_offsets_byte_len
     }
-    fn seq_lookup_count_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_count_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_coverage_offsets_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn seq_lookup_records_byte_range(&self) -> Range<usize> {
+
+    pub fn seq_lookup_records_byte_range(&self) -> Range<usize> {
         let start = self.seq_lookup_count_byte_range().end;
         start..start + self.seq_lookup_records_byte_len
+    }
+}
+
+impl MinByteRange for ChainedSequenceContextFormat3Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.seq_lookup_records_byte_range().end
     }
 }
 
@@ -3447,6 +3748,7 @@ impl<'a> FontRead<'a> for ChainedSequenceContextFormat3<'a> {
 /// [Chained Sequence Context Format 3](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#chained-sequence-context-format-3-coverage-based-glyph-contexts)
 pub type ChainedSequenceContextFormat3<'a> = TableRef<'a, ChainedSequenceContextFormat3Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ChainedSequenceContextFormat3<'a> {
     /// Format identifier: format = 3
     pub fn format(&self) -> u16 {
@@ -3598,6 +3900,7 @@ impl<'a> SomeTable<'a> for ChainedSequenceContextFormat3<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ChainedSequenceContextFormat3<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -3643,6 +3946,16 @@ impl<'a> FontRead<'a> for ChainedSequenceContext<'a> {
     }
 }
 
+impl MinByteRange for ChainedSequenceContext<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1(item) => item.min_byte_range(),
+            Self::Format2(item) => item.min_byte_range(),
+            Self::Format3(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> ChainedSequenceContext<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -3655,7 +3968,7 @@ impl<'a> ChainedSequenceContext<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for ChainedSequenceContext<'a> {
+impl std::fmt::Debug for ChainedSequenceContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -3733,21 +4046,30 @@ pub struct DeviceMarker {
 }
 
 impl DeviceMarker {
-    fn start_size_byte_range(&self) -> Range<usize> {
+    pub fn start_size_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn end_size_byte_range(&self) -> Range<usize> {
+
+    pub fn end_size_byte_range(&self) -> Range<usize> {
         let start = self.start_size_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn delta_format_byte_range(&self) -> Range<usize> {
+
+    pub fn delta_format_byte_range(&self) -> Range<usize> {
         let start = self.end_size_byte_range().end;
         start..start + DeltaFormat::RAW_BYTE_LEN
     }
-    fn delta_value_byte_range(&self) -> Range<usize> {
+
+    pub fn delta_value_byte_range(&self) -> Range<usize> {
         let start = self.delta_format_byte_range().end;
         start..start + self.delta_value_byte_len
+    }
+}
+
+impl MinByteRange for DeviceMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.delta_value_byte_range().end
     }
 }
 
@@ -3770,6 +4092,7 @@ impl<'a> FontRead<'a> for Device<'a> {
 /// [Device Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#device-and-variationindex-tables)
 pub type Device<'a> = TableRef<'a, DeviceMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Device<'a> {
     /// Smallest size to correct, in ppem
     pub fn start_size(&self) -> u16 {
@@ -3813,6 +4136,7 @@ impl<'a> SomeTable<'a> for Device<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Device<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -3825,17 +4149,25 @@ impl<'a> std::fmt::Debug for Device<'a> {
 pub struct VariationIndexMarker {}
 
 impl VariationIndexMarker {
-    fn delta_set_outer_index_byte_range(&self) -> Range<usize> {
+    pub fn delta_set_outer_index_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn delta_set_inner_index_byte_range(&self) -> Range<usize> {
+
+    pub fn delta_set_inner_index_byte_range(&self) -> Range<usize> {
         let start = self.delta_set_outer_index_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn delta_format_byte_range(&self) -> Range<usize> {
+
+    pub fn delta_format_byte_range(&self) -> Range<usize> {
         let start = self.delta_set_inner_index_byte_range().end;
         start..start + DeltaFormat::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for VariationIndexMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.delta_format_byte_range().end
     }
 }
 
@@ -3852,6 +4184,7 @@ impl<'a> FontRead<'a> for VariationIndex<'a> {
 /// Variation index table
 pub type VariationIndex<'a> = TableRef<'a, VariationIndexMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> VariationIndex<'a> {
     /// A delta-set outer index — used to select an item variation
     /// data subtable within the item variation store.
@@ -3896,6 +4229,7 @@ impl<'a> SomeTable<'a> for VariationIndex<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for VariationIndex<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -3936,6 +4270,15 @@ impl<'a> FontRead<'a> for DeviceOrVariationIndex<'a> {
     }
 }
 
+impl MinByteRange for DeviceOrVariationIndex<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Device(item) => item.min_byte_range(),
+            Self::VariationIndex(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> DeviceOrVariationIndex<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -3947,7 +4290,7 @@ impl<'a> DeviceOrVariationIndex<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for DeviceOrVariationIndex<'a> {
+impl std::fmt::Debug for DeviceOrVariationIndex<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -3971,17 +4314,25 @@ pub struct FeatureVariationsMarker {
 }
 
 impl FeatureVariationsMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn feature_variation_record_count_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_variation_record_count_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn feature_variation_records_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_variation_records_byte_range(&self) -> Range<usize> {
         let start = self.feature_variation_record_count_byte_range().end;
         start..start + self.feature_variation_records_byte_len
+    }
+}
+
+impl MinByteRange for FeatureVariationsMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.feature_variation_records_byte_range().end
     }
 }
 
@@ -4003,6 +4354,7 @@ impl<'a> FontRead<'a> for FeatureVariations<'a> {
 /// [FeatureVariations Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#featurevariations-table)
 pub type FeatureVariations<'a> = TableRef<'a, FeatureVariationsMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FeatureVariations<'a> {
     pub fn version(&self) -> MajorMinor {
         let range = self.shape.version_byte_range();
@@ -4048,6 +4400,7 @@ impl<'a> SomeTable<'a> for FeatureVariations<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FeatureVariations<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -4141,13 +4494,20 @@ pub struct ConditionSetMarker {
 }
 
 impl ConditionSetMarker {
-    fn condition_count_byte_range(&self) -> Range<usize> {
+    pub fn condition_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn condition_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn condition_offsets_byte_range(&self) -> Range<usize> {
         let start = self.condition_count_byte_range().end;
         start..start + self.condition_offsets_byte_len
+    }
+}
+
+impl MinByteRange for ConditionSetMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.condition_offsets_byte_range().end
     }
 }
 
@@ -4168,6 +4528,7 @@ impl<'a> FontRead<'a> for ConditionSet<'a> {
 /// [ConditionSet Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#conditionset-table)
 pub type ConditionSet<'a> = TableRef<'a, ConditionSetMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ConditionSet<'a> {
     /// Number of conditions for this condition set.
     pub fn condition_count(&self) -> u16 {
@@ -4218,6 +4579,7 @@ impl<'a> SomeTable<'a> for ConditionSet<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ConditionSet<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -4275,6 +4637,18 @@ impl<'a> FontRead<'a> for Condition<'a> {
     }
 }
 
+impl MinByteRange for Condition<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1AxisRange(item) => item.min_byte_range(),
+            Self::Format2VariableValue(item) => item.min_byte_range(),
+            Self::Format3And(item) => item.min_byte_range(),
+            Self::Format4Or(item) => item.min_byte_range(),
+            Self::Format5Negate(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> Condition<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -4289,7 +4663,7 @@ impl<'a> Condition<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for Condition<'a> {
+impl std::fmt::Debug for Condition<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -4315,21 +4689,30 @@ impl Format<u16> for ConditionFormat1Marker {
 pub struct ConditionFormat1Marker {}
 
 impl ConditionFormat1Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_index_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_index_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn filter_range_min_value_byte_range(&self) -> Range<usize> {
+
+    pub fn filter_range_min_value_byte_range(&self) -> Range<usize> {
         let start = self.axis_index_byte_range().end;
         start..start + F2Dot14::RAW_BYTE_LEN
     }
-    fn filter_range_max_value_byte_range(&self) -> Range<usize> {
+
+    pub fn filter_range_max_value_byte_range(&self) -> Range<usize> {
         let start = self.filter_range_min_value_byte_range().end;
         start..start + F2Dot14::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for ConditionFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.filter_range_max_value_byte_range().end
     }
 }
 
@@ -4347,6 +4730,7 @@ impl<'a> FontRead<'a> for ConditionFormat1<'a> {
 /// [Condition Table Format 1](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#condition-table-format-1-font-variation-axis-range): Font Variation Axis Range
 pub type ConditionFormat1<'a> = TableRef<'a, ConditionFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ConditionFormat1<'a> {
     /// Format, = 1
     pub fn format(&self) -> u16 {
@@ -4399,6 +4783,7 @@ impl<'a> SomeTable<'a> for ConditionFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ConditionFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -4415,17 +4800,25 @@ impl Format<u16> for ConditionFormat2Marker {
 pub struct ConditionFormat2Marker {}
 
 impl ConditionFormat2Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn default_value_byte_range(&self) -> Range<usize> {
+
+    pub fn default_value_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn var_index_byte_range(&self) -> Range<usize> {
+
+    pub fn var_index_byte_range(&self) -> Range<usize> {
         let start = self.default_value_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for ConditionFormat2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.var_index_byte_range().end
     }
 }
 
@@ -4442,6 +4835,7 @@ impl<'a> FontRead<'a> for ConditionFormat2<'a> {
 /// [Condition Table Format 2](https://github.com/fonttools/fonttools/blob/5e6b12d12fa08abafbeb7570f47707fbedf69a45/Lib/fontTools/ttLib/tables/otData.py#L3237-L3255): Variation index
 pub type ConditionFormat2<'a> = TableRef<'a, ConditionFormat2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ConditionFormat2<'a> {
     /// Format, = 2
     pub fn format(&self) -> u16 {
@@ -4478,6 +4872,7 @@ impl<'a> SomeTable<'a> for ConditionFormat2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ConditionFormat2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -4496,17 +4891,25 @@ pub struct ConditionFormat3Marker {
 }
 
 impl ConditionFormat3Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn condition_count_byte_range(&self) -> Range<usize> {
+
+    pub fn condition_count_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn condition_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn condition_offsets_byte_range(&self) -> Range<usize> {
         let start = self.condition_count_byte_range().end;
         start..start + self.condition_offsets_byte_len
+    }
+}
+
+impl MinByteRange for ConditionFormat3Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.condition_offsets_byte_range().end
     }
 }
 
@@ -4528,6 +4931,7 @@ impl<'a> FontRead<'a> for ConditionFormat3<'a> {
 /// [Condition Table Format 3](https://github.com/fonttools/fonttools/blob/5e6b12d12fa08abafbeb7570f47707fbedf69a45/Lib/fontTools/ttLib/tables/otData.py#L3257-L3275): AND
 pub type ConditionFormat3<'a> = TableRef<'a, ConditionFormat3Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ConditionFormat3<'a> {
     /// Format, = 3
     pub fn format(&self) -> u16 {
@@ -4584,6 +4988,7 @@ impl<'a> SomeTable<'a> for ConditionFormat3<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ConditionFormat3<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -4602,17 +5007,25 @@ pub struct ConditionFormat4Marker {
 }
 
 impl ConditionFormat4Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn condition_count_byte_range(&self) -> Range<usize> {
+
+    pub fn condition_count_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn condition_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn condition_offsets_byte_range(&self) -> Range<usize> {
         let start = self.condition_count_byte_range().end;
         start..start + self.condition_offsets_byte_len
+    }
+}
+
+impl MinByteRange for ConditionFormat4Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.condition_offsets_byte_range().end
     }
 }
 
@@ -4634,6 +5047,7 @@ impl<'a> FontRead<'a> for ConditionFormat4<'a> {
 /// [Condition Table Format 4](https://github.com/fonttools/fonttools/blob/5e6b12d12fa08abafbeb7570f47707fbedf69a45/Lib/fontTools/ttLib/tables/otData.py#L3276-L3295): OR
 pub type ConditionFormat4<'a> = TableRef<'a, ConditionFormat4Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ConditionFormat4<'a> {
     /// Format, = 4
     pub fn format(&self) -> u16 {
@@ -4690,6 +5104,7 @@ impl<'a> SomeTable<'a> for ConditionFormat4<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ConditionFormat4<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -4706,13 +5121,20 @@ impl Format<u16> for ConditionFormat5Marker {
 pub struct ConditionFormat5Marker {}
 
 impl ConditionFormat5Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn condition_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn condition_offset_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + Offset24::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for ConditionFormat5Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.condition_offset_byte_range().end
     }
 }
 
@@ -4728,6 +5150,7 @@ impl<'a> FontRead<'a> for ConditionFormat5<'a> {
 /// [Condition Table Format 5](https://github.com/fonttools/fonttools/blob/5e6b12d12fa08abafbeb7570f47707fbedf69a45/Lib/fontTools/ttLib/tables/otData.py#L3296-L3308): NOT
 pub type ConditionFormat5<'a> = TableRef<'a, ConditionFormat5Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ConditionFormat5<'a> {
     /// Format, = 5
     pub fn format(&self) -> u16 {
@@ -4766,6 +5189,7 @@ impl<'a> SomeTable<'a> for ConditionFormat5<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ConditionFormat5<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -4780,17 +5204,25 @@ pub struct FeatureTableSubstitutionMarker {
 }
 
 impl FeatureTableSubstitutionMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn substitution_count_byte_range(&self) -> Range<usize> {
+
+    pub fn substitution_count_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn substitutions_byte_range(&self) -> Range<usize> {
+
+    pub fn substitutions_byte_range(&self) -> Range<usize> {
         let start = self.substitution_count_byte_range().end;
         start..start + self.substitutions_byte_len
+    }
+}
+
+impl MinByteRange for FeatureTableSubstitutionMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.substitutions_byte_range().end
     }
 }
 
@@ -4812,6 +5244,7 @@ impl<'a> FontRead<'a> for FeatureTableSubstitution<'a> {
 /// [FeatureTableSubstitution Table](https://docs.microsoft.com/en-us/typography/opentype/spec/chapter2#featuretablesubstitution-table)
 pub type FeatureTableSubstitution<'a> = TableRef<'a, FeatureTableSubstitutionMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FeatureTableSubstitution<'a> {
     /// Major & minor version of the table: (1, 0)
     pub fn version(&self) -> MajorMinor {
@@ -4855,6 +5288,7 @@ impl<'a> SomeTable<'a> for FeatureTableSubstitution<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for FeatureTableSubstitution<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -4916,25 +5350,35 @@ impl<'a> SomeRecord<'a> for FeatureTableSubstitutionRecord {
 pub struct SizeParamsMarker {}
 
 impl SizeParamsMarker {
-    fn design_size_byte_range(&self) -> Range<usize> {
+    pub fn design_size_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn identifier_byte_range(&self) -> Range<usize> {
+
+    pub fn identifier_byte_range(&self) -> Range<usize> {
         let start = self.design_size_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn name_entry_byte_range(&self) -> Range<usize> {
+
+    pub fn name_entry_byte_range(&self) -> Range<usize> {
         let start = self.identifier_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn range_start_byte_range(&self) -> Range<usize> {
+
+    pub fn range_start_byte_range(&self) -> Range<usize> {
         let start = self.name_entry_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn range_end_byte_range(&self) -> Range<usize> {
+
+    pub fn range_end_byte_range(&self) -> Range<usize> {
         let start = self.range_start_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for SizeParamsMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.range_end_byte_range().end
     }
 }
 
@@ -4952,6 +5396,7 @@ impl<'a> FontRead<'a> for SizeParams<'a> {
 
 pub type SizeParams<'a> = TableRef<'a, SizeParamsMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SizeParams<'a> {
     /// The first value represents the design size in 720/inch units (decipoints).
     ///
@@ -5022,6 +5467,7 @@ impl<'a> SomeTable<'a> for SizeParams<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SizeParams<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -5033,13 +5479,20 @@ impl<'a> std::fmt::Debug for SizeParams<'a> {
 pub struct StylisticSetParamsMarker {}
 
 impl StylisticSetParamsMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn ui_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn ui_name_id_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for StylisticSetParamsMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.ui_name_id_byte_range().end
     }
 }
 
@@ -5054,6 +5507,7 @@ impl<'a> FontRead<'a> for StylisticSetParams<'a> {
 
 pub type StylisticSetParams<'a> = TableRef<'a, StylisticSetParamsMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> StylisticSetParams<'a> {
     pub fn version(&self) -> u16 {
         let range = self.shape.version_byte_range();
@@ -5090,6 +5544,7 @@ impl<'a> SomeTable<'a> for StylisticSetParams<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for StylisticSetParams<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -5108,37 +5563,50 @@ pub struct CharacterVariantParamsMarker {
 }
 
 impl CharacterVariantParamsMarker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn feat_ui_label_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn feat_ui_label_name_id_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
     }
-    fn feat_ui_tooltip_text_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn feat_ui_tooltip_text_name_id_byte_range(&self) -> Range<usize> {
         let start = self.feat_ui_label_name_id_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
     }
-    fn sample_text_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn sample_text_name_id_byte_range(&self) -> Range<usize> {
         let start = self.feat_ui_tooltip_text_name_id_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
     }
-    fn num_named_parameters_byte_range(&self) -> Range<usize> {
+
+    pub fn num_named_parameters_byte_range(&self) -> Range<usize> {
         let start = self.sample_text_name_id_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn first_param_ui_label_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn first_param_ui_label_name_id_byte_range(&self) -> Range<usize> {
         let start = self.num_named_parameters_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
     }
-    fn char_count_byte_range(&self) -> Range<usize> {
+
+    pub fn char_count_byte_range(&self) -> Range<usize> {
         let start = self.first_param_ui_label_name_id_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn character_byte_range(&self) -> Range<usize> {
+
+    pub fn character_byte_range(&self) -> Range<usize> {
         let start = self.char_count_byte_range().end;
         start..start + self.character_byte_len
+    }
+}
+
+impl MinByteRange for CharacterVariantParamsMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.character_byte_range().end
     }
 }
 
@@ -5163,6 +5631,7 @@ impl<'a> FontRead<'a> for CharacterVariantParams<'a> {
 /// featureParams for ['cv01'-'cv99'](https://docs.microsoft.com/en-us/typography/opentype/spec/features_ae#cv01-cv99)
 pub type CharacterVariantParams<'a> = TableRef<'a, CharacterVariantParamsMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> CharacterVariantParams<'a> {
     /// Format number is set to 0.
     pub fn format(&self) -> u16 {
@@ -5258,6 +5727,7 @@ impl<'a> SomeTable<'a> for CharacterVariantParams<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for CharacterVariantParams<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

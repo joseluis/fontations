@@ -1,5 +1,4 @@
 /// A legacy 16/16 version encoding
-
 /// Packed 32-bit value with major and minor version numbers.
 ///
 /// This is a legacy type with an unusual representation. See [the spec][spec] for
@@ -65,7 +64,7 @@ impl Version16Dot16 {
     /// Panics if `minor > 9`.
     pub const fn new(major: u16, minor: u16) -> Self {
         assert!(minor < 10, "minor version must be in the range [0, 9)");
-        let version = (major as u32) << 16 | (minor as u32) << 12;
+        let version = ((major as u32) << 16) | ((minor as u32) << 12);
         Version16Dot16(version)
     }
 

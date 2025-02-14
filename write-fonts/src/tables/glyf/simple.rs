@@ -7,19 +7,18 @@ use crate::{
 };
 
 use kurbo::BezPath;
-use read_fonts::{
-    tables::glyf::{CurvePoint, SimpleGlyphFlags},
-    FontRead,
-};
+use read_fonts::{tables::glyf::SimpleGlyphFlags, FontRead};
+
+pub use read_fonts::tables::glyf::CurvePoint;
 
 use super::Bbox;
 
 /// A simple (without components) glyph
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SimpleGlyph {
     pub bbox: Bbox,
-    contours: Vec<Contour>,
-    _instructions: Vec<u8>,
+    pub contours: Vec<Contour>,
+    pub instructions: Vec<u8>,
 }
 
 /// A single contour, comprising only line and quadratic bezier segments
@@ -135,8 +134,30 @@ impl SimpleGlyph {
         })
     }
 
-    pub fn contours(&self) -> &[Contour] {
-        &self.contours
+    /// Recompute the Glyph's bounding box based on the current contours
+    pub fn recompute_bounding_box(&mut self) {
+        let mut points = self
+            .contours
+            .iter()
+            .flat_map(|c| c.iter())
+            .map(|p| (p.x, p.y));
+
+        if let Some((mut x_min, mut y_min)) = points.next() {
+            let mut x_max = x_min;
+            let mut y_max = y_min;
+            for (x, y) in points {
+                x_min = x_min.min(x);
+                y_min = y_min.min(y);
+                x_max = x_max.max(x);
+                y_max = y_max.max(y);
+            }
+            self.bbox = Bbox {
+                x_min,
+                y_min,
+                x_max,
+                y_max,
+            };
+        }
     }
 }
 
@@ -153,6 +174,18 @@ impl Contour {
 
     pub fn iter(&self) -> impl Iterator<Item = &CurvePoint> {
         self.0.iter()
+    }
+}
+
+impl From<Vec<CurvePoint>> for Contour {
+    fn from(points: Vec<CurvePoint>) -> Self {
+        Self(points)
+    }
+}
+
+impl From<Contour> for Vec<CurvePoint> {
+    fn from(contour: Contour) -> Self {
+        contour.0
     }
 }
 
@@ -194,7 +227,7 @@ impl FontWrite for CoordDelta {
     }
 }
 
-impl<'a> FromObjRef<read_fonts::tables::glyf::SimpleGlyph<'a>> for SimpleGlyph {
+impl FromObjRef<read_fonts::tables::glyf::SimpleGlyph<'_>> for SimpleGlyph {
     fn from_obj_ref(
         from: &read_fonts::tables::glyf::SimpleGlyph,
         _data: read_fonts::FontData,
@@ -217,12 +250,12 @@ impl<'a> FromObjRef<read_fonts::tables::glyf::SimpleGlyph<'a>> for SimpleGlyph {
         Self {
             bbox,
             contours,
-            _instructions: from.instructions().to_owned(),
+            instructions: from.instructions().to_owned(),
         }
     }
 }
 
-impl<'a> FromTableRef<read_fonts::tables::glyf::SimpleGlyph<'a>> for SimpleGlyph {}
+impl FromTableRef<read_fonts::tables::glyf::SimpleGlyph<'_>> for SimpleGlyph {}
 
 impl<'a> FontRead<'a> for SimpleGlyph {
     fn read(data: read_fonts::FontData<'a>) -> Result<Self, read_fonts::ReadError> {
@@ -233,7 +266,7 @@ impl<'a> FontRead<'a> for SimpleGlyph {
 impl FontWrite for SimpleGlyph {
     fn write_into(&self, writer: &mut crate::TableWriter) {
         assert!(self.contours.len() < i16::MAX as usize);
-        assert!(self._instructions.len() < u16::MAX as usize);
+        assert!(self.instructions.len() < u16::MAX as usize);
         let n_contours = self.contours.len() as i16;
         if n_contours == 0 {
             // we don't bother writing empty glyphs
@@ -247,8 +280,8 @@ impl FontWrite for SimpleGlyph {
             cur += contour.len();
             (cur as u16 - 1).write_into(writer);
         }
-        (self._instructions.len() as u16).write_into(writer);
-        self._instructions.write_into(writer);
+        (self.instructions.len() as u16).write_into(writer);
+        self.instructions.write_into(writer);
 
         let deltas = self.compute_point_deltas().collect::<Vec<_>>();
         RepeatableFlag::iter_from_flags(deltas.iter().map(|(flag, _, _)| *flag))
@@ -337,7 +370,7 @@ impl RepeatableFlag {
 
 impl crate::validate::Validate for SimpleGlyph {
     fn validate_impl(&self, ctx: &mut crate::codegen_prelude::ValidationCtx) {
-        if self._instructions.len() > u16::MAX as usize {
+        if self.instructions.len() > u16::MAX as usize {
             ctx.report("instructions len overflows");
         }
     }
@@ -578,7 +611,7 @@ fn simple_glyphs_from_kurbo(paths: &[BezPath]) -> Result<Vec<SimpleGlyph>, Malfo
         glyphs.push(SimpleGlyph {
             bbox: path.control_box().into(),
             contours,
-            _instructions: Default::default(),
+            instructions: Default::default(),
         })
     }
 
@@ -942,8 +975,8 @@ mod tests {
 
     fn assert_contour_points(glyph: &SimpleGlyph, all_points: Vec<Vec<CurvePoint>>) {
         let expected_num_contours = all_points.len();
-        assert_eq!(glyph.contours().len(), expected_num_contours);
-        for (contour, expected_points) in glyph.contours().iter().zip(all_points.iter()) {
+        assert_eq!(glyph.contours.len(), expected_num_contours);
+        for (contour, expected_points) in glyph.contours.iter().zip(all_points.iter()) {
             let points = contour.iter().copied().collect::<Vec<_>>();
             assert_eq!(points, *expected_points);
         }

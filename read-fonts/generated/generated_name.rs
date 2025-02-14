@@ -16,29 +16,40 @@ pub struct NameMarker {
 }
 
 impl NameMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn count_byte_range(&self) -> Range<usize> {
+
+    pub fn count_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn storage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn storage_offset_byte_range(&self) -> Range<usize> {
         let start = self.count_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn name_record_byte_range(&self) -> Range<usize> {
+
+    pub fn name_record_byte_range(&self) -> Range<usize> {
         let start = self.storage_offset_byte_range().end;
         start..start + self.name_record_byte_len
     }
-    fn lang_tag_count_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn lang_tag_count_byte_range(&self) -> Option<Range<usize>> {
         let start = self.lang_tag_count_byte_start?;
         Some(start..start + u16::RAW_BYTE_LEN)
     }
-    fn lang_tag_record_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn lang_tag_record_byte_range(&self) -> Option<Range<usize>> {
         let start = self.lang_tag_record_byte_start?;
         Some(start..start + self.lang_tag_record_byte_len?)
+    }
+}
+
+impl MinByteRange for NameMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.name_record_byte_range().end
     }
 }
 
@@ -65,7 +76,7 @@ impl<'a> FontRead<'a> for Name<'a> {
             .compatible(1u16)
             .then(|| cursor.read::<u16>())
             .transpose()?
-            .unwrap_or(0);
+            .unwrap_or_default();
         let lang_tag_record_byte_start = version
             .compatible(1u16)
             .then(|| cursor.position())
@@ -90,6 +101,7 @@ impl<'a> FontRead<'a> for Name<'a> {
 /// [Naming table version 1](https://docs.microsoft.com/en-us/typography/opentype/spec/name#naming-table-version-1)
 pub type Name<'a> = TableRef<'a, NameMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Name<'a> {
     /// Table version number (0 or 1)
     pub fn version(&self) -> u16 {
@@ -164,6 +176,7 @@ impl<'a> SomeTable<'a> for Name<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Name<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

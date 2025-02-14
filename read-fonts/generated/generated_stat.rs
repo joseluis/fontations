@@ -13,33 +13,45 @@ pub struct StatMarker {
 }
 
 impl StatMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn design_axis_size_byte_range(&self) -> Range<usize> {
+
+    pub fn design_axis_size_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn design_axis_count_byte_range(&self) -> Range<usize> {
+
+    pub fn design_axis_count_byte_range(&self) -> Range<usize> {
         let start = self.design_axis_size_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn design_axes_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn design_axes_offset_byte_range(&self) -> Range<usize> {
         let start = self.design_axis_count_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn axis_value_count_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_value_count_byte_range(&self) -> Range<usize> {
         let start = self.design_axes_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn offset_to_axis_value_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn offset_to_axis_value_offsets_byte_range(&self) -> Range<usize> {
         let start = self.axis_value_count_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
     }
-    fn elided_fallback_name_id_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn elided_fallback_name_id_byte_range(&self) -> Option<Range<usize>> {
         let start = self.elided_fallback_name_id_byte_start?;
         Some(start..start + NameId::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for StatMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.offset_to_axis_value_offsets_byte_range().end
     }
 }
 
@@ -73,6 +85,7 @@ impl<'a> FontRead<'a> for Stat<'a> {
 /// [STAT](https://docs.microsoft.com/en-us/typography/opentype/spec/stat) (Style Attributes Table)
 pub type Stat<'a> = TableRef<'a, StatMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Stat<'a> {
     /// Major/minor version number. Set to 1.2 for new fonts.
     pub fn version(&self) -> MajorMinor {
@@ -181,6 +194,7 @@ impl<'a> SomeTable<'a> for Stat<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Stat<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -251,9 +265,15 @@ pub struct AxisValueArrayMarker {
 }
 
 impl AxisValueArrayMarker {
-    fn axis_value_offsets_byte_range(&self) -> Range<usize> {
+    pub fn axis_value_offsets_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + self.axis_value_offsets_byte_len
+    }
+}
+
+impl MinByteRange for AxisValueArrayMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.axis_value_offsets_byte_range().end
     }
 }
 
@@ -289,6 +309,7 @@ impl<'a> AxisValueArray<'a> {
 /// An array of [AxisValue] tables.
 pub type AxisValueArray<'a> = TableRef<'a, AxisValueArrayMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> AxisValueArray<'a> {
     /// Array of offsets to axis value tables, in bytes from the start
     /// of the axis value offsets array.
@@ -332,6 +353,7 @@ impl<'a> SomeTable<'a> for AxisValueArray<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for AxisValueArray<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -403,6 +425,17 @@ impl<'a> FontRead<'a> for AxisValue<'a> {
     }
 }
 
+impl MinByteRange for AxisValue<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1(item) => item.min_byte_range(),
+            Self::Format2(item) => item.min_byte_range(),
+            Self::Format3(item) => item.min_byte_range(),
+            Self::Format4(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> AxisValue<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -416,7 +449,7 @@ impl<'a> AxisValue<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for AxisValue<'a> {
+impl std::fmt::Debug for AxisValue<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -442,25 +475,35 @@ impl Format<u16> for AxisValueFormat1Marker {
 pub struct AxisValueFormat1Marker {}
 
 impl AxisValueFormat1Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_index_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_index_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.axis_index_byte_range().end;
         start..start + AxisValueTableFlags::RAW_BYTE_LEN
     }
-    fn value_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn value_name_id_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
     }
-    fn value_byte_range(&self) -> Range<usize> {
+
+    pub fn value_byte_range(&self) -> Range<usize> {
         let start = self.value_name_id_byte_range().end;
         start..start + Fixed::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for AxisValueFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.value_byte_range().end
     }
 }
 
@@ -479,6 +522,7 @@ impl<'a> FontRead<'a> for AxisValueFormat1<'a> {
 /// [Axis value table format 1](https://docs.microsoft.com/en-us/typography/opentype/spec/stat#axis-value-table-format-1)
 pub type AxisValueFormat1<'a> = TableRef<'a, AxisValueFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> AxisValueFormat1<'a> {
     /// Format identifier — set to 1.
     pub fn format(&self) -> u16 {
@@ -532,6 +576,7 @@ impl<'a> SomeTable<'a> for AxisValueFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for AxisValueFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -548,33 +593,45 @@ impl Format<u16> for AxisValueFormat2Marker {
 pub struct AxisValueFormat2Marker {}
 
 impl AxisValueFormat2Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_index_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_index_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.axis_index_byte_range().end;
         start..start + AxisValueTableFlags::RAW_BYTE_LEN
     }
-    fn value_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn value_name_id_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
     }
-    fn nominal_value_byte_range(&self) -> Range<usize> {
+
+    pub fn nominal_value_byte_range(&self) -> Range<usize> {
         let start = self.value_name_id_byte_range().end;
         start..start + Fixed::RAW_BYTE_LEN
     }
-    fn range_min_value_byte_range(&self) -> Range<usize> {
+
+    pub fn range_min_value_byte_range(&self) -> Range<usize> {
         let start = self.nominal_value_byte_range().end;
         start..start + Fixed::RAW_BYTE_LEN
     }
-    fn range_max_value_byte_range(&self) -> Range<usize> {
+
+    pub fn range_max_value_byte_range(&self) -> Range<usize> {
         let start = self.range_min_value_byte_range().end;
         start..start + Fixed::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for AxisValueFormat2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.range_max_value_byte_range().end
     }
 }
 
@@ -595,6 +652,7 @@ impl<'a> FontRead<'a> for AxisValueFormat2<'a> {
 /// [Axis value table format 2](https://docs.microsoft.com/en-us/typography/opentype/spec/stat#axis-value-table-format-2)
 pub type AxisValueFormat2<'a> = TableRef<'a, AxisValueFormat2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> AxisValueFormat2<'a> {
     /// Format identifier — set to 2.
     pub fn format(&self) -> u16 {
@@ -664,6 +722,7 @@ impl<'a> SomeTable<'a> for AxisValueFormat2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for AxisValueFormat2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -680,29 +739,40 @@ impl Format<u16> for AxisValueFormat3Marker {
 pub struct AxisValueFormat3Marker {}
 
 impl AxisValueFormat3Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_index_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_index_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.axis_index_byte_range().end;
         start..start + AxisValueTableFlags::RAW_BYTE_LEN
     }
-    fn value_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn value_name_id_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
     }
-    fn value_byte_range(&self) -> Range<usize> {
+
+    pub fn value_byte_range(&self) -> Range<usize> {
         let start = self.value_name_id_byte_range().end;
         start..start + Fixed::RAW_BYTE_LEN
     }
-    fn linked_value_byte_range(&self) -> Range<usize> {
+
+    pub fn linked_value_byte_range(&self) -> Range<usize> {
         let start = self.value_byte_range().end;
         start..start + Fixed::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for AxisValueFormat3Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.linked_value_byte_range().end
     }
 }
 
@@ -722,6 +792,7 @@ impl<'a> FontRead<'a> for AxisValueFormat3<'a> {
 /// [Axis value table format 3](https://docs.microsoft.com/en-us/typography/opentype/spec/stat#axis-value-table-format-3)
 pub type AxisValueFormat3<'a> = TableRef<'a, AxisValueFormat3Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> AxisValueFormat3<'a> {
     /// Format identifier — set to 3.
     pub fn format(&self) -> u16 {
@@ -782,6 +853,7 @@ impl<'a> SomeTable<'a> for AxisValueFormat3<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for AxisValueFormat3<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -800,25 +872,35 @@ pub struct AxisValueFormat4Marker {
 }
 
 impl AxisValueFormat4Marker {
-    fn format_byte_range(&self) -> Range<usize> {
+    pub fn format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_count_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_count_byte_range(&self) -> Range<usize> {
         let start = self.format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn flags_byte_range(&self) -> Range<usize> {
+
+    pub fn flags_byte_range(&self) -> Range<usize> {
         let start = self.axis_count_byte_range().end;
         start..start + AxisValueTableFlags::RAW_BYTE_LEN
     }
-    fn value_name_id_byte_range(&self) -> Range<usize> {
+
+    pub fn value_name_id_byte_range(&self) -> Range<usize> {
         let start = self.flags_byte_range().end;
         start..start + NameId::RAW_BYTE_LEN
     }
-    fn axis_values_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_values_byte_range(&self) -> Range<usize> {
         let start = self.value_name_id_byte_range().end;
         start..start + self.axis_values_byte_len
+    }
+}
+
+impl MinByteRange for AxisValueFormat4Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.axis_values_byte_range().end
     }
 }
 
@@ -842,6 +924,7 @@ impl<'a> FontRead<'a> for AxisValueFormat4<'a> {
 /// [Axis value table format 4](https://docs.microsoft.com/en-us/typography/opentype/spec/stat#axis-value-table-format-4)
 pub type AxisValueFormat4<'a> = TableRef<'a, AxisValueFormat4Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> AxisValueFormat4<'a> {
     /// Format identifier — set to 4.
     pub fn format(&self) -> u16 {
@@ -902,6 +985,7 @@ impl<'a> SomeTable<'a> for AxisValueFormat4<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for AxisValueFormat4<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

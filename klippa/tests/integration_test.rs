@@ -6,7 +6,7 @@
 //! To generate the expected output files, pass GEN_EXPECTED_OUTPUTS=1 as an
 //! environment variable.
 
-use klippa::{parse_unicodes, subset_font, Plan, SubsetFlags};
+use klippa::{parse_unicodes, subset_font, Plan, SubsetFlags, DEFAULT_LAYOUT_FEATURES};
 use skrifa::GlyphId;
 use std::fmt::Write;
 use std::fs;
@@ -33,13 +33,12 @@ struct SubsetTestCase {
     /// command line args for subsetter
     profiles: Vec<(String, SubsetInput)>,
 
-    ///subset codepoints to retain
+    /// subset codepoints to retain
     subsets: Vec<String>,
 
-    ///command line args for instancer
+    //command line args for instancer
     //TODO: add support for instancing
     //instances: Vec<String>,
-
     ///compare against fonttools or not
     fonttool_options: bool,
 
@@ -53,6 +52,8 @@ struct SubsetInput {
     pub name_ids: IntSet<NameId>,
     pub name_languages: IntSet<u16>,
     pub gids: IntSet<GlyphId>,
+    pub layout_scripts: IntSet<Tag>,
+    pub layout_features: IntSet<Tag>,
 }
 
 #[derive(Default)]
@@ -214,6 +215,13 @@ fn parse_profile_options(file_name: &str) -> SubsetInput {
 
     let mut gids = IntSet::empty();
 
+    let mut layout_scripts = IntSet::<Tag>::empty();
+    layout_scripts.invert();
+
+    let mut layout_features = IntSet::<Tag>::empty();
+    layout_features.extend(DEFAULT_LAYOUT_FEATURES.iter().copied());
+
+    //TODO: parse str instead of hard code
     for line in input.lines() {
         match line.trim() {
             "--desubroutinize" => subset_flag |= SubsetFlags::SUBSET_FLAGS_DESUBROUTINIZE,
@@ -237,6 +245,19 @@ fn parse_profile_options(file_name: &str) -> SubsetInput {
             "--gids=1,2,3" => {
                 gids.insert_range(GlyphId::new(1)..=GlyphId::new(3));
             }
+            "--layout-scripts=grek,latn" => {
+                layout_scripts.clear();
+                layout_scripts.insert(Tag::new(b"grek"));
+                layout_scripts.insert(Tag::new(b"latn"));
+            }
+            "--layout-scripts=grek,cyrl" => {
+                layout_scripts.clear();
+                layout_scripts.insert(Tag::new(b"grek"));
+                layout_scripts.insert(Tag::new(b"cyrl"));
+            }
+            "--layout-scripts-=*" => {
+                layout_scripts.clear();
+            }
             _ => continue,
         }
     }
@@ -245,6 +266,8 @@ fn parse_profile_options(file_name: &str) -> SubsetInput {
         name_ids,
         name_languages,
         gids,
+        layout_scripts,
+        layout_features,
     }
 }
 
@@ -338,7 +361,7 @@ impl SubsetTestCase {
         Command::new("fonttools")
             .arg("subset")
             .arg(&org_font_file)
-            .arg("--drop-tables+=DSIG,BASE,GSUB,GPOS,GDEF,hdmx,fpgm,prep,cvt,gasp,cvar,HVAR,STAT")
+            .arg("--drop-tables+=DSIG,GSUB,GPOS,GDEF,fpgm,prep,cvt,gasp,cvar,HVAR,STAT")
             .arg("--drop-tables-=sbix")
             .arg("--no-harfbuzz-repacker")
             .arg("--no-prune-codepage-ranges")
@@ -390,7 +413,7 @@ fn gen_subset_font_file(
     let font = FontRef::new(&org_font_bytes).unwrap();
 
     let unicodes = parse_unicodes(subset).unwrap();
-    let drop_tables_str = "DSIG,BASE,GSUB,GPOS,GDEF,hdmx,fpgm,prep,cvt,gasp,cvar,HVAR,STAT";
+    let drop_tables_str = "morx,mort,kerx,kern,JSTF,DSIG,EBDT,EBLC,EBSC,SVG,PCLT,LTSH,feat,Glat,Gloc,Silf,Sill,GSUB,GPOS,GDEF,fpgm,prep,cvt,gasp,cvar,HVAR,STAT";
     let mut drop_tables = IntSet::empty();
     for str in drop_tables_str.split(',') {
         let tag = Tag::new_checked(str.as_bytes()).unwrap();
@@ -408,6 +431,8 @@ fn gen_subset_font_file(
         &font,
         profile.subset_flag,
         &drop_tables,
+        &profile.layout_scripts,
+        &profile.layout_features,
         &profile.name_ids,
         &profile.name_languages,
     );
@@ -424,9 +449,9 @@ fn convert_text_to_unicodes(text: &str) -> String {
     for c in text.chars() {
         let c = c as u32;
         if out.is_empty() {
-            write!(&mut out, "{:x}", c).unwrap();
+            write!(&mut out, "{:X}", c).unwrap();
         } else {
-            write!(&mut out, ",{:x}", c).unwrap();
+            write!(&mut out, ",{:X}", c).unwrap();
         }
     }
     out

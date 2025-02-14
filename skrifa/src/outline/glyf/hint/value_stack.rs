@@ -16,7 +16,7 @@ use HintErrorKind::{ValueStackOverflow, ValueStackUnderflow};
 pub struct ValueStack<'a> {
     values: &'a mut [i32],
     len: usize,
-    is_pedantic: bool,
+    pub(super) is_pedantic: bool,
 }
 
 impl<'a> ValueStack<'a> {
@@ -112,6 +112,19 @@ impl<'a> ValueStack<'a> {
         Ok(self.pop()? as usize)
     }
 
+    /// Convenience method for popping a value intended as a count.
+    ///
+    /// When a negative value is encountered, returns an error in pedantic mode
+    /// or 0 otherwise.
+    pub fn pop_count_checked(&mut self) -> Result<usize, HintErrorKind> {
+        let value = self.pop()?;
+        if value < 0 && self.is_pedantic {
+            Err(HintErrorKind::InvalidStackValue(value))
+        } else {
+            Ok(value.max(0) as usize)
+        }
+    }
+
     /// Applies a unary operation.
     ///
     /// Pops `a` from the stack and pushes `op(a)`.
@@ -193,10 +206,11 @@ impl<'a> ValueStack<'a> {
         let top_ix = self.len.checked_sub(1).ok_or(ValueStackUnderflow)?;
         let index = *self.values.get(top_ix).ok_or(ValueStackUnderflow)? as usize;
         let element_ix = top_ix.checked_sub(index).ok_or(ValueStackUnderflow)?;
+        let new_top_ix = top_ix.checked_sub(1).ok_or(ValueStackUnderflow)?;
         let value = self.values[element_ix];
         self.values
             .copy_within(element_ix + 1..self.len, element_ix);
-        self.values[top_ix - 1] = value;
+        self.values[new_top_ix] = value;
         self.len -= 1;
         Ok(())
     }
@@ -345,5 +359,30 @@ mod tests {
         assert_eq!(stack.peek(), Some(-25));
         stack.apply_binary(|a, b| Ok(a / b)).unwrap();
         assert_eq!(stack.peek(), Some(0));
+    }
+
+    // Subtract with overflow when stack size is 1 and element index is 0
+    // https://oss-fuzz.com/testcase-detail/5765856825507840
+    #[test]
+    fn move_index_avoid_overflow() {
+        let mut stack = make_stack!(&mut [0]);
+        // Don't panic
+        let _ = stack.move_index();
+    }
+
+    #[test]
+    fn pop_count_checked() {
+        let mut stack = make_stack!(&mut [-1, 128, -1, 128]);
+        stack.is_pedantic = true;
+        assert_eq!(stack.pop_count_checked(), Ok(128));
+        // In pedantic mode, return an error for negative values
+        assert!(matches!(
+            stack.pop_count_checked(),
+            Err(HintErrorKind::InvalidStackValue(-1))
+        ));
+        stack.is_pedantic = false;
+        assert_eq!(stack.pop_count_checked(), Ok(128));
+        // In non-pedantic mode, return 0 instead of error
+        assert_eq!(stack.pop_count_checked(), Ok(0));
     }
 }

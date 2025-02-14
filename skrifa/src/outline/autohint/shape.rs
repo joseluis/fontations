@@ -9,12 +9,16 @@ use raw::{
             ChainedSequenceContext, Gsub, SequenceContext, SingleSubst, SubstitutionLookupList,
             SubstitutionSubtables,
         },
-        layout::ScriptTags,
+        layout::{Feature, ScriptTags},
         varc::CoverageTable,
     },
     types::Tag,
     ReadError, TableProvider,
 };
+
+// To prevent infinite recursion in contextual lookups. Matches HB
+// <https://github.com/harfbuzz/harfbuzz/blob/c7ef6a2ed58ae8ec108ee0962bef46f42c73a60c/src/hb-limits.hh#L53>
+const MAX_NESTING_DEPTH: usize = 64;
 
 /// Determines the fidelity with which we apply shaping in the
 /// autohinter.
@@ -103,22 +107,35 @@ impl<'a> Shaper<'a> {
         &self.charmap
     }
 
-    /// Shapes the given input text with the current mode and stores the
-    /// resulting glyphs in the output cluster.
-    pub fn shape_cluster(&self, input: &str, output: &mut ShapedCluster) {
-        output.clear();
-        for (i, ch) in input.chars().enumerate() {
-            if i > 0 {
-                // In nominal mode, we reject input clusters with multiple
-                // characters
-                // See <https://gitlab.freedesktop.org/freetype/freetype/-/blob/57617782464411201ce7bbc93b086c1b4d7d84a5/src/autofit/afshaper.c#L639>
-                output.clear();
-                return;
+    pub fn cluster_shaper(&'a self, style: &StyleClass) -> ClusterShaper<'a> {
+        if self.mode == ShaperMode::BestEffort {
+            // For now, only apply substitutions for styles with an associated
+            // feature
+            if let Some(feature_tag) = style.feature {
+                if let Some((lookup_list, feature)) = self.gsub.as_ref().and_then(|gsub| {
+                    let script_list = gsub.script_list().ok()?;
+                    let selected_script =
+                        script_list.select(&ScriptTags::from_unicode(style.script.tag))?;
+                    let script = script_list.get(selected_script.index).ok()?;
+                    let lang_sys = script.default_lang_sys()?.ok()?;
+                    let feature_list = gsub.feature_list().ok()?;
+                    let feature_ix = lang_sys.feature_index_for_tag(&feature_list, feature_tag)?;
+                    let feature = feature_list.get(feature_ix).ok()?.element;
+                    let lookup_list = gsub.lookup_list().ok()?;
+                    Some((lookup_list, feature))
+                }) {
+                    return ClusterShaper {
+                        shaper: self,
+                        lookup_list: Some(lookup_list),
+                        kind: ClusterShaperKind::SingleFeature(feature),
+                    };
+                }
             }
-            output.push(ShapedGlyph {
-                id: self.charmap.map(ch).unwrap_or_default(),
-                y_offset: 0,
-            });
+        }
+        ClusterShaper {
+            shaper: self,
+            lookup_list: None,
+            kind: ClusterShaperKind::Nominal,
         }
     }
 
@@ -206,7 +223,8 @@ impl<'a> Shaper<'a> {
                     };
                     // And now process associated lookups
                     for index in feature.lookup_list_indices().iter() {
-                        gsub_handler.process_lookup(index.get(), 0);
+                        // We only care about errors here for testing
+                        let _ = gsub_handler.process_lookup(index.get());
                     }
                 }
             }
@@ -225,6 +243,122 @@ impl<'a> Shaper<'a> {
             false
         }
     }
+}
+
+pub(crate) struct ClusterShaper<'a> {
+    shaper: &'a Shaper<'a>,
+    lookup_list: Option<SubstitutionLookupList<'a>>,
+    kind: ClusterShaperKind<'a>,
+}
+
+impl ClusterShaper<'_> {
+    pub(crate) fn shape(&mut self, input: &str, output: &mut ShapedCluster) {
+        // First fill the output cluster with the nominal character
+        // to glyph id mapping
+        output.clear();
+        for ch in input.chars() {
+            output.push(ShapedGlyph {
+                id: self.shaper.charmap.map(ch).unwrap_or_default(),
+                y_offset: 0,
+            });
+        }
+        match self.kind.clone() {
+            ClusterShaperKind::Nominal => {
+                // In nominal mode, reject clusters with multiple glyphs
+                // See <https://gitlab.freedesktop.org/freetype/freetype/-/blob/57617782464411201ce7bbc93b086c1b4d7d84a5/src/autofit/afshaper.c#L639>
+                if self.shaper.mode == ShaperMode::Nominal && output.len() > 1 {
+                    output.clear();
+                }
+            }
+            ClusterShaperKind::SingleFeature(feature) => {
+                let mut did_subst = false;
+                for lookup_ix in feature.lookup_list_indices() {
+                    let mut glyph_ix = 0;
+                    while glyph_ix < output.len() {
+                        did_subst |= self.apply_lookup(lookup_ix.get(), output, glyph_ix, 0);
+                        glyph_ix += 1;
+                    }
+                }
+                // Reject clusters that weren't modified by the feature.
+                // FreeType detects this by shaping twice and comparing gids
+                // but we just track substitutions
+                // <https://gitlab.freedesktop.org/freetype/freetype/-/blob/57617782464411201ce7bbc93b086c1b4d7d84a5/src/autofit/afshaper.c#L528>
+                if !did_subst {
+                    output.clear();
+                }
+            }
+        }
+    }
+
+    fn apply_lookup(
+        &self,
+        lookup_index: u16,
+        cluster: &mut ShapedCluster,
+        glyph_ix: usize,
+        nesting_depth: usize,
+    ) -> bool {
+        if nesting_depth > MAX_NESTING_DEPTH {
+            return false;
+        }
+        let Some(glyph) = cluster.get_mut(glyph_ix) else {
+            return false;
+        };
+        let Some(subtables) = self
+            .lookup_list
+            .as_ref()
+            .and_then(|list| list.lookups().get(lookup_index as usize).ok())
+            .and_then(|lookup| lookup.subtables().ok())
+        else {
+            return false;
+        };
+        match subtables {
+            // For now, just applying single substitutions because we're
+            // currently only handling shaping for "feature" styles like
+            // c2sc (caps to small caps) which are (almost?) always
+            // single substs
+            SubstitutionSubtables::Single(tables) => {
+                for table in tables.iter().filter_map(|table| table.ok()) {
+                    match table {
+                        SingleSubst::Format1(table) => {
+                            let Some(_) = table.coverage().ok().and_then(|cov| cov.get(glyph.id))
+                            else {
+                                continue;
+                            };
+                            let delta = table.delta_glyph_id() as i32;
+                            glyph.id = GlyphId::from((glyph.id.to_u32() as i32 + delta) as u16);
+                            return true;
+                        }
+                        SingleSubst::Format2(table) => {
+                            let Some(cov_ix) =
+                                table.coverage().ok().and_then(|cov| cov.get(glyph.id))
+                            else {
+                                continue;
+                            };
+                            let Some(subst) = table.substitute_glyph_ids().get(cov_ix as usize)
+                            else {
+                                continue;
+                            };
+                            glyph.id = subst.get().into();
+                            return true;
+                        }
+                    }
+                }
+            }
+            SubstitutionSubtables::Multiple(_tables) => {}
+            SubstitutionSubtables::Ligature(_tables) => {}
+            SubstitutionSubtables::Alternate(_tables) => {}
+            SubstitutionSubtables::Contextual(_tables) => {}
+            SubstitutionSubtables::ChainContextual(_tables) => {}
+            SubstitutionSubtables::Reverse(_tables) => {}
+        }
+        false
+    }
+}
+
+#[derive(Clone)]
+enum ClusterShaperKind<'a> {
+    Nominal,
+    SingleFeature(Feature<'a>),
 }
 
 /// Captures glyphs from the GSUB table that aren't present in cmap.
@@ -256,6 +390,9 @@ struct GsubHandler<'a> {
     // Keep track of our range of touched gids in the style list
     min_gid: usize,
     max_gid: usize,
+    // Stack for detecting cycles in lookups
+    lookup_stack: [u16; MAX_NESTING_DEPTH],
+    lookup_depth: usize,
 }
 
 impl<'a> GsubHandler<'a> {
@@ -278,23 +415,43 @@ impl<'a> GsubHandler<'a> {
             need_blue_substs,
             min_gid,
             max_gid: 0,
+            lookup_stack: [0; MAX_NESTING_DEPTH],
+            lookup_depth: 0,
         }
     }
 
-    fn process_lookup(&mut self, lookup_index: u16, nesting_depth: u32) {
-        // To prevent infinite recursion in contextual lookups. Matches HB
-        // <https://github.com/harfbuzz/harfbuzz/blob/c7ef6a2ed58ae8ec108ee0962bef46f42c73a60c/src/hb-limits.hh#L53>
-        const MAX_NESTING_DEPTH: u32 = 64;
-        if nesting_depth > MAX_NESTING_DEPTH {
-            return;
+    fn process_lookup(&mut self, lookup_index: u16) -> Result<(), ProcessLookupError> {
+        // Guard: don't cycle and don't exceed depth limit
+        // Note: we use a linear search here under the assumption that
+        // most fonts have shallow contextual lookup chains
+        if self.lookup_depth != 0 {
+            if self.lookup_depth == MAX_NESTING_DEPTH {
+                return Err(ProcessLookupError::ExceededMaxDepth);
+            }
+            if self.lookup_stack[..self.lookup_depth].contains(&lookup_index) {
+                return Err(ProcessLookupError::CycleDetected);
+            }
         }
+        self.lookup_stack[self.lookup_depth] = lookup_index;
+        self.lookup_depth += 1;
+
+        // Actually process the lookup
+        let result = self.process_lookup_inner(lookup_index);
+
+        // Out we go again
+        self.lookup_depth -= 1;
+        result
+    }
+
+    #[inline(always)]
+    fn process_lookup_inner(&mut self, lookup_index: u16) -> Result<(), ProcessLookupError> {
         let Ok(subtables) = self
             .lookup_list
             .lookups()
             .get(lookup_index as usize)
             .and_then(|lookup| lookup.subtables())
         else {
-            return;
+            return Ok(());
         };
         match subtables {
             SubstitutionSubtables::Single(tables) => {
@@ -311,7 +468,7 @@ impl<'a> GsubHandler<'a> {
                             // Check input coverage for blue strings if
                             // required and if we're not under a contextual
                             // lookup
-                            if self.need_blue_substs && nesting_depth == 0 {
+                            if self.need_blue_substs && self.lookup_depth == 1 {
                                 self.check_blue_coverage(Ok(coverage));
                             }
                         }
@@ -320,7 +477,7 @@ impl<'a> GsubHandler<'a> {
                                 self.capture_glyph(gid.get().to_u32());
                             }
                             // See above
-                            if self.need_blue_substs && nesting_depth == 0 {
+                            if self.need_blue_substs && self.lookup_depth == 1 {
                                 self.check_blue_coverage(table.coverage());
                             }
                         }
@@ -335,7 +492,7 @@ impl<'a> GsubHandler<'a> {
                         }
                     }
                     // See above
-                    if self.need_blue_substs && nesting_depth == 0 {
+                    if self.need_blue_substs && self.lookup_depth == 1 {
                         self.check_blue_coverage(table.coverage());
                     }
                 }
@@ -369,10 +526,7 @@ impl<'a> GsubHandler<'a> {
                             {
                                 for rule in set.seq_rules().iter().filter_map(|rule| rule.ok()) {
                                     for rec in rule.seq_lookup_records() {
-                                        self.process_lookup(
-                                            rec.lookup_list_index(),
-                                            nesting_depth + 1,
-                                        );
+                                        self.process_lookup(rec.lookup_list_index())?;
                                     }
                                 }
                             }
@@ -387,17 +541,14 @@ impl<'a> GsubHandler<'a> {
                                     set.class_seq_rules().iter().filter_map(|rule| rule.ok())
                                 {
                                     for rec in rule.seq_lookup_records() {
-                                        self.process_lookup(
-                                            rec.lookup_list_index(),
-                                            nesting_depth + 1,
-                                        );
+                                        self.process_lookup(rec.lookup_list_index())?;
                                     }
                                 }
                             }
                         }
                         SequenceContext::Format3(table) => {
                             for rec in table.seq_lookup_records() {
-                                self.process_lookup(rec.lookup_list_index(), nesting_depth + 1);
+                                self.process_lookup(rec.lookup_list_index())?;
                             }
                         }
                     }
@@ -416,10 +567,7 @@ impl<'a> GsubHandler<'a> {
                                     set.chained_seq_rules().iter().filter_map(|rule| rule.ok())
                                 {
                                     for rec in rule.seq_lookup_records() {
-                                        self.process_lookup(
-                                            rec.lookup_list_index(),
-                                            nesting_depth + 1,
-                                        );
+                                        self.process_lookup(rec.lookup_list_index())?;
                                     }
                                 }
                             }
@@ -436,17 +584,14 @@ impl<'a> GsubHandler<'a> {
                                     .filter_map(|rule| rule.ok())
                                 {
                                     for rec in rule.seq_lookup_records() {
-                                        self.process_lookup(
-                                            rec.lookup_list_index(),
-                                            nesting_depth + 1,
-                                        );
+                                        self.process_lookup(rec.lookup_list_index())?;
                                     }
                                 }
                             }
                         }
                         ChainedSequenceContext::Format3(table) => {
                             for rec in table.seq_lookup_records() {
-                                self.process_lookup(rec.lookup_list_index(), nesting_depth + 1);
+                                self.process_lookup(rec.lookup_list_index())?;
                             }
                         }
                     }
@@ -460,6 +605,7 @@ impl<'a> GsubHandler<'a> {
                 }
             }
         }
+        Ok(())
     }
 
     /// Finishes processing for this set of GSUB lookups and
@@ -510,6 +656,127 @@ impl<'a> GsubHandler<'a> {
             style.set_from_gsub_output();
             self.min_gid = gid.min(self.min_gid);
             self.max_gid = gid.max(self.max_gid);
+        }
+    }
+}
+
+#[derive(PartialEq, Debug)]
+enum ProcessLookupError {
+    ExceededMaxDepth,
+    CycleDetected,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{super::style, *};
+    use font_test_data::bebuffer::BeBuffer;
+    use raw::{FontData, FontRead};
+
+    #[test]
+    fn small_caps_subst() {
+        let font = FontRef::new(font_test_data::NOTOSERIF_AUTOHINT_SHAPING).unwrap();
+        let shaper = Shaper::new(&font, ShaperMode::BestEffort);
+        let style = &style::STYLE_CLASSES[style::StyleClass::LATN_C2SC];
+        let mut cluster_shaper = shaper.cluster_shaper(style);
+        let mut cluster = ShapedCluster::new();
+        cluster_shaper.shape("H", &mut cluster);
+        assert_eq!(cluster.len(), 1);
+        // from ttx, gid 8 is small caps "H"
+        assert_eq!(cluster[0].id, GlyphId::new(8));
+    }
+
+    #[test]
+    fn small_caps_nominal() {
+        let font = FontRef::new(font_test_data::NOTOSERIF_AUTOHINT_SHAPING).unwrap();
+        let shaper = Shaper::new(&font, ShaperMode::Nominal);
+        let style = &style::STYLE_CLASSES[style::StyleClass::LATN_C2SC];
+        let mut cluster_shaper = shaper.cluster_shaper(style);
+        let mut cluster = ShapedCluster::new();
+        cluster_shaper.shape("H", &mut cluster);
+        assert_eq!(cluster.len(), 1);
+        // from ttx, gid 1 is "H"
+        assert_eq!(cluster[0].id, GlyphId::new(1));
+    }
+
+    #[test]
+    fn exceed_max_depth() {
+        let font = FontRef::new(font_test_data::NOTOSERIF_AUTOHINT_SHAPING).unwrap();
+        let shaper = Shaper::new(&font, ShaperMode::BestEffort);
+        let style = &style::STYLE_CLASSES[style::StyleClass::LATN];
+        // Build a lookup chain exceeding our max depth
+        let mut bad_lookup_builder = BadLookupBuilder::default();
+        for i in 0..MAX_NESTING_DEPTH {
+            // each lookup calls the next
+            bad_lookup_builder.lookups.push(i as u16 + 1);
+        }
+        let lookup_list_buf = bad_lookup_builder.build();
+        let lookup_list = SubstitutionLookupList::read(FontData::new(&lookup_list_buf)).unwrap();
+        let mut gsub_handler = GsubHandler::new(&shaper.charmap, &lookup_list, style, &mut []);
+        assert_eq!(
+            gsub_handler.process_lookup(0),
+            Err(ProcessLookupError::ExceededMaxDepth)
+        );
+    }
+
+    #[test]
+    fn detect_cycles() {
+        let font = FontRef::new(font_test_data::NOTOSERIF_AUTOHINT_SHAPING).unwrap();
+        let shaper = Shaper::new(&font, ShaperMode::BestEffort);
+        let style = &style::STYLE_CLASSES[style::StyleClass::LATN];
+        // Build a lookup chain that cycles; 0 calls 1 which calls 0
+        let mut bad_lookup_builder = BadLookupBuilder::default();
+        bad_lookup_builder.lookups.push(1);
+        bad_lookup_builder.lookups.push(0);
+        let lookup_list_buf = bad_lookup_builder.build();
+        let lookup_list = SubstitutionLookupList::read(FontData::new(&lookup_list_buf)).unwrap();
+        let mut gsub_handler = GsubHandler::new(&shaper.charmap, &lookup_list, style, &mut []);
+        assert_eq!(
+            gsub_handler.process_lookup(0),
+            Err(ProcessLookupError::CycleDetected)
+        );
+    }
+
+    #[derive(Default)]
+    struct BadLookupBuilder {
+        /// Just a list of nested lookup indices for each generated lookup
+        lookups: Vec<u16>,
+    }
+
+    impl BadLookupBuilder {
+        fn build(&self) -> Vec<u8> {
+            // Full byte size of a contextual format 3 lookup with one
+            // subtable and one nested lookup
+            const CONTEXT3_FULL_SIZE: usize = 18;
+            let mut buf = BeBuffer::default();
+            // LookupList table
+            // count
+            buf = buf.push(self.lookups.len() as u16);
+            // offsets for each lookup
+            let base_offset = 2 + 2 * self.lookups.len();
+            for i in 0..self.lookups.len() {
+                buf = buf.push((base_offset + i * CONTEXT3_FULL_SIZE) as u16);
+            }
+            // now the actual lookups
+            for nested_ix in &self.lookups {
+                // lookup type: GSUB contextual substitution
+                buf = buf.push(5u16);
+                // lookup flag
+                buf = buf.push(0u16);
+                // subtable count
+                buf = buf.push(1u16);
+                // offset to single subtable (always 8 bytes from start of lookup)
+                buf = buf.push(8u16);
+                // start of subtable, format == 3
+                buf = buf.push(3u16);
+                // number of glyphs in sequence
+                buf = buf.push(0u16);
+                // sequence lookup count
+                buf = buf.push(1u16);
+                // (no coverage offsets)
+                // sequence lookup (sequence index, lookup index)
+                buf = buf.push(0u16).push(*nested_ix);
+            }
+            buf.to_vec()
         }
     }
 }

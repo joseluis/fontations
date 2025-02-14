@@ -13,25 +13,35 @@ pub struct GsubMarker {
 }
 
 impl GsubMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn script_list_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn script_list_offset_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn feature_list_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_list_offset_byte_range(&self) -> Range<usize> {
         let start = self.script_list_offset_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn lookup_list_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn lookup_list_offset_byte_range(&self) -> Range<usize> {
         let start = self.feature_list_offset_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn feature_variations_offset_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn feature_variations_offset_byte_range(&self) -> Option<Range<usize>> {
         let start = self.feature_variations_offset_byte_start?;
         Some(start..start + Offset32::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for GsubMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.lookup_list_offset_byte_range().end
     }
 }
 
@@ -63,6 +73,7 @@ impl<'a> FontRead<'a> for Gsub<'a> {
 /// [GSUB](https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#gsub-header)
 pub type Gsub<'a> = TableRef<'a, GsubMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Gsub<'a> {
     /// The major and minor version of the GSUB table, as a tuple (u16, u16)
     pub fn version(&self) -> MajorMinor {
@@ -154,6 +165,7 @@ impl<'a> SomeTable<'a> for Gsub<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Gsub<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -235,7 +247,7 @@ impl<'a> SomeTable<'a> for SubstitutionLookup<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for SubstitutionLookup<'a> {
+impl std::fmt::Debug for SubstitutionLookup<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -286,6 +298,15 @@ impl<'a> FontRead<'a> for SingleSubst<'a> {
     }
 }
 
+impl MinByteRange for SingleSubst<'_> {
+    fn min_byte_range(&self) -> Range<usize> {
+        match self {
+            Self::Format1(item) => item.min_byte_range(),
+            Self::Format2(item) => item.min_byte_range(),
+        }
+    }
+}
+
 #[cfg(feature = "experimental_traverse")]
 impl<'a> SingleSubst<'a> {
     fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -297,7 +318,7 @@ impl<'a> SingleSubst<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for SingleSubst<'a> {
+impl std::fmt::Debug for SingleSubst<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -323,17 +344,25 @@ impl Format<u16> for SingleSubstFormat1Marker {
 pub struct SingleSubstFormat1Marker {}
 
 impl SingleSubstFormat1Marker {
-    fn subst_format_byte_range(&self) -> Range<usize> {
+    pub fn subst_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.subst_format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn delta_glyph_id_byte_range(&self) -> Range<usize> {
+
+    pub fn delta_glyph_id_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for SingleSubstFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.delta_glyph_id_byte_range().end
     }
 }
 
@@ -350,6 +379,7 @@ impl<'a> FontRead<'a> for SingleSubstFormat1<'a> {
 /// [Single Substitution Format 1](https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#11-single-substitution-format-1)
 pub type SingleSubstFormat1<'a> = TableRef<'a, SingleSubstFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SingleSubstFormat1<'a> {
     /// Format identifier: format = 1
     pub fn subst_format(&self) -> u16 {
@@ -396,6 +426,7 @@ impl<'a> SomeTable<'a> for SingleSubstFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SingleSubstFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -414,21 +445,30 @@ pub struct SingleSubstFormat2Marker {
 }
 
 impl SingleSubstFormat2Marker {
-    fn subst_format_byte_range(&self) -> Range<usize> {
+    pub fn subst_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.subst_format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn substitute_glyph_ids_byte_range(&self) -> Range<usize> {
+
+    pub fn substitute_glyph_ids_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + self.substitute_glyph_ids_byte_len
+    }
+}
+
+impl MinByteRange for SingleSubstFormat2Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.substitute_glyph_ids_byte_range().end
     }
 }
 
@@ -451,6 +491,7 @@ impl<'a> FontRead<'a> for SingleSubstFormat2<'a> {
 /// [Single Substitution Format 2](https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#12-single-substitution-format-2)
 pub type SingleSubstFormat2<'a> = TableRef<'a, SingleSubstFormat2Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SingleSubstFormat2<'a> {
     /// Format identifier: format = 2
     pub fn subst_format(&self) -> u16 {
@@ -507,6 +548,7 @@ impl<'a> SomeTable<'a> for SingleSubstFormat2<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SingleSubstFormat2<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -525,21 +567,30 @@ pub struct MultipleSubstFormat1Marker {
 }
 
 impl MultipleSubstFormat1Marker {
-    fn subst_format_byte_range(&self) -> Range<usize> {
+    pub fn subst_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.subst_format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn sequence_count_byte_range(&self) -> Range<usize> {
+
+    pub fn sequence_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn sequence_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn sequence_offsets_byte_range(&self) -> Range<usize> {
         let start = self.sequence_count_byte_range().end;
         start..start + self.sequence_offsets_byte_len
+    }
+}
+
+impl MinByteRange for MultipleSubstFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.sequence_offsets_byte_range().end
     }
 }
 
@@ -562,6 +613,7 @@ impl<'a> FontRead<'a> for MultipleSubstFormat1<'a> {
 /// [Multiple Substitution Format 1](https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#21-multiple-substitution-format-1)
 pub type MultipleSubstFormat1<'a> = TableRef<'a, MultipleSubstFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> MultipleSubstFormat1<'a> {
     /// Format identifier: format = 1
     pub fn subst_format(&self) -> u16 {
@@ -636,6 +688,7 @@ impl<'a> SomeTable<'a> for MultipleSubstFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for MultipleSubstFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -650,13 +703,20 @@ pub struct SequenceMarker {
 }
 
 impl SequenceMarker {
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn substitute_glyph_ids_byte_range(&self) -> Range<usize> {
+
+    pub fn substitute_glyph_ids_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + self.substitute_glyph_ids_byte_len
+    }
+}
+
+impl MinByteRange for SequenceMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.substitute_glyph_ids_byte_range().end
     }
 }
 
@@ -677,6 +737,7 @@ impl<'a> FontRead<'a> for Sequence<'a> {
 /// Part of [MultipleSubstFormat1]
 pub type Sequence<'a> = TableRef<'a, SequenceMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Sequence<'a> {
     /// Number of glyph IDs in the substituteGlyphIDs array. This must
     /// always be greater than 0.
@@ -710,6 +771,7 @@ impl<'a> SomeTable<'a> for Sequence<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Sequence<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -728,21 +790,30 @@ pub struct AlternateSubstFormat1Marker {
 }
 
 impl AlternateSubstFormat1Marker {
-    fn subst_format_byte_range(&self) -> Range<usize> {
+    pub fn subst_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.subst_format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn alternate_set_count_byte_range(&self) -> Range<usize> {
+
+    pub fn alternate_set_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn alternate_set_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn alternate_set_offsets_byte_range(&self) -> Range<usize> {
         let start = self.alternate_set_count_byte_range().end;
         start..start + self.alternate_set_offsets_byte_len
+    }
+}
+
+impl MinByteRange for AlternateSubstFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.alternate_set_offsets_byte_range().end
     }
 }
 
@@ -765,6 +836,7 @@ impl<'a> FontRead<'a> for AlternateSubstFormat1<'a> {
 /// [Alternate Substitution Format 1](https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#31-alternate-substitution-format-1)
 pub type AlternateSubstFormat1<'a> = TableRef<'a, AlternateSubstFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> AlternateSubstFormat1<'a> {
     /// Format identifier: format = 1
     pub fn subst_format(&self) -> u16 {
@@ -842,6 +914,7 @@ impl<'a> SomeTable<'a> for AlternateSubstFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for AlternateSubstFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -856,13 +929,20 @@ pub struct AlternateSetMarker {
 }
 
 impl AlternateSetMarker {
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn alternate_glyph_ids_byte_range(&self) -> Range<usize> {
+
+    pub fn alternate_glyph_ids_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + self.alternate_glyph_ids_byte_len
+    }
+}
+
+impl MinByteRange for AlternateSetMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.alternate_glyph_ids_byte_range().end
     }
 }
 
@@ -883,6 +963,7 @@ impl<'a> FontRead<'a> for AlternateSet<'a> {
 /// Part of [AlternateSubstFormat1]
 pub type AlternateSet<'a> = TableRef<'a, AlternateSetMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> AlternateSet<'a> {
     /// Number of glyph IDs in the alternateGlyphIDs array
     pub fn glyph_count(&self) -> u16 {
@@ -915,6 +996,7 @@ impl<'a> SomeTable<'a> for AlternateSet<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for AlternateSet<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -933,21 +1015,30 @@ pub struct LigatureSubstFormat1Marker {
 }
 
 impl LigatureSubstFormat1Marker {
-    fn subst_format_byte_range(&self) -> Range<usize> {
+    pub fn subst_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.subst_format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn ligature_set_count_byte_range(&self) -> Range<usize> {
+
+    pub fn ligature_set_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn ligature_set_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn ligature_set_offsets_byte_range(&self) -> Range<usize> {
         let start = self.ligature_set_count_byte_range().end;
         start..start + self.ligature_set_offsets_byte_len
+    }
+}
+
+impl MinByteRange for LigatureSubstFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.ligature_set_offsets_byte_range().end
     }
 }
 
@@ -970,6 +1061,7 @@ impl<'a> FontRead<'a> for LigatureSubstFormat1<'a> {
 /// [Ligature Substitution Format 1](https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#41-ligature-substitution-format-1)
 pub type LigatureSubstFormat1<'a> = TableRef<'a, LigatureSubstFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> LigatureSubstFormat1<'a> {
     /// Format identifier: format = 1
     pub fn subst_format(&self) -> u16 {
@@ -1044,6 +1136,7 @@ impl<'a> SomeTable<'a> for LigatureSubstFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for LigatureSubstFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1058,13 +1151,20 @@ pub struct LigatureSetMarker {
 }
 
 impl LigatureSetMarker {
-    fn ligature_count_byte_range(&self) -> Range<usize> {
+    pub fn ligature_count_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn ligature_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn ligature_offsets_byte_range(&self) -> Range<usize> {
         let start = self.ligature_count_byte_range().end;
         start..start + self.ligature_offsets_byte_len
+    }
+}
+
+impl MinByteRange for LigatureSetMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.ligature_offsets_byte_range().end
     }
 }
 
@@ -1085,6 +1185,7 @@ impl<'a> FontRead<'a> for LigatureSet<'a> {
 /// Part of [LigatureSubstFormat1]
 pub type LigatureSet<'a> = TableRef<'a, LigatureSetMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> LigatureSet<'a> {
     /// Number of Ligature tables
     pub fn ligature_count(&self) -> u16 {
@@ -1135,6 +1236,7 @@ impl<'a> SomeTable<'a> for LigatureSet<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for LigatureSet<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1149,17 +1251,25 @@ pub struct LigatureMarker {
 }
 
 impl LigatureMarker {
-    fn ligature_glyph_byte_range(&self) -> Range<usize> {
+    pub fn ligature_glyph_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + GlyphId16::RAW_BYTE_LEN
     }
-    fn component_count_byte_range(&self) -> Range<usize> {
+
+    pub fn component_count_byte_range(&self) -> Range<usize> {
         let start = self.ligature_glyph_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn component_glyph_ids_byte_range(&self) -> Range<usize> {
+
+    pub fn component_glyph_ids_byte_range(&self) -> Range<usize> {
         let start = self.component_count_byte_range().end;
         start..start + self.component_glyph_ids_byte_len
+    }
+}
+
+impl MinByteRange for LigatureMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.component_glyph_ids_byte_range().end
     }
 }
 
@@ -1181,6 +1291,7 @@ impl<'a> FontRead<'a> for Ligature<'a> {
 /// Part of [LigatureSubstFormat1]
 pub type Ligature<'a> = TableRef<'a, LigatureMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Ligature<'a> {
     /// glyph ID of ligature to substitute
     pub fn ligature_glyph(&self) -> GlyphId16 {
@@ -1221,6 +1332,7 @@ impl<'a> SomeTable<'a> for Ligature<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Ligature<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1239,17 +1351,25 @@ pub struct ExtensionSubstFormat1Marker<T = ()> {
 }
 
 impl<T> ExtensionSubstFormat1Marker<T> {
-    fn subst_format_byte_range(&self) -> Range<usize> {
+    pub fn subst_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn extension_lookup_type_byte_range(&self) -> Range<usize> {
+
+    pub fn extension_lookup_type_byte_range(&self) -> Range<usize> {
         let start = self.subst_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn extension_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn extension_offset_byte_range(&self) -> Range<usize> {
         let start = self.extension_lookup_type_byte_range().end;
         start..start + Offset32::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for ExtensionSubstFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.extension_offset_byte_range().end
     }
 }
 
@@ -1303,6 +1423,7 @@ impl<'a, T> ExtensionSubstFormat1<'a, T> {
 /// [Extension Substitution Subtable Format 1](https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#71-extension-substitution-subtable-format-1)
 pub type ExtensionSubstFormat1<'a, T> = TableRef<'a, ExtensionSubstFormat1Marker<T>>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a, T> ExtensionSubstFormat1<'a, T> {
     /// Format identifier. Set to 1.
     pub fn subst_format(&self) -> u16 {
@@ -1357,6 +1478,7 @@ impl<'a, T: FontRead<'a> + SomeTable<'a> + 'a> SomeTable<'a> for ExtensionSubstF
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a, T: FontRead<'a> + SomeTable<'a> + 'a> std::fmt::Debug for ExtensionSubstFormat1<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -1434,7 +1556,7 @@ impl<'a> SomeTable<'a> for ExtensionSubtable<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
-impl<'a> std::fmt::Debug for ExtensionSubtable<'a> {
+impl std::fmt::Debug for ExtensionSubtable<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.dyn_inner().fmt(f)
     }
@@ -1454,37 +1576,50 @@ pub struct ReverseChainSingleSubstFormat1Marker {
 }
 
 impl ReverseChainSingleSubstFormat1Marker {
-    fn subst_format_byte_range(&self) -> Range<usize> {
+    pub fn subst_format_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn coverage_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn coverage_offset_byte_range(&self) -> Range<usize> {
         let start = self.subst_format_byte_range().end;
         start..start + Offset16::RAW_BYTE_LEN
     }
-    fn backtrack_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn backtrack_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.coverage_offset_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn backtrack_coverage_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn backtrack_coverage_offsets_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_glyph_count_byte_range().end;
         start..start + self.backtrack_coverage_offsets_byte_len
     }
-    fn lookahead_glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.backtrack_coverage_offsets_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn lookahead_coverage_offsets_byte_range(&self) -> Range<usize> {
+
+    pub fn lookahead_coverage_offsets_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_glyph_count_byte_range().end;
         start..start + self.lookahead_coverage_offsets_byte_len
     }
-    fn glyph_count_byte_range(&self) -> Range<usize> {
+
+    pub fn glyph_count_byte_range(&self) -> Range<usize> {
         let start = self.lookahead_coverage_offsets_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn substitute_glyph_ids_byte_range(&self) -> Range<usize> {
+
+    pub fn substitute_glyph_ids_byte_range(&self) -> Range<usize> {
         let start = self.glyph_count_byte_range().end;
         start..start + self.substitute_glyph_ids_byte_len
+    }
+}
+
+impl MinByteRange for ReverseChainSingleSubstFormat1Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.substitute_glyph_ids_byte_range().end
     }
 }
 
@@ -1519,6 +1654,7 @@ impl<'a> FontRead<'a> for ReverseChainSingleSubstFormat1<'a> {
 /// [Reverse Chaining Contextual Single Substitution Format 1](https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#81-reverse-chaining-contextual-single-substitution-format-1-coverage-based-glyph-contexts)
 pub type ReverseChainSingleSubstFormat1<'a> = TableRef<'a, ReverseChainSingleSubstFormat1Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> ReverseChainSingleSubstFormat1<'a> {
     /// Format identifier: format = 1
     pub fn subst_format(&self) -> u16 {
@@ -1651,6 +1787,7 @@ impl<'a> SomeTable<'a> for ReverseChainSingleSubstFormat1<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for ReverseChainSingleSubstFormat1<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

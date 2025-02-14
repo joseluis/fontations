@@ -27,7 +27,7 @@ impl FontWrite for Cmap {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         (0 as u16).write_into(writer);
-        (array_len(&self.encoding_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.encoding_records)).unwrap()).write_into(writer);
         self.encoding_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -61,6 +61,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap<'a>> for Cmap {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap<'a>> for Cmap {}
 
 impl<'a> FontRead<'a> for Cmap {
@@ -158,14 +159,8 @@ impl CmapSubtable {
     }
 
     /// Construct a new `Cmap4` subtable
-    #[allow(clippy::too_many_arguments)]
     pub fn format_4(
-        length: u16,
         language: u16,
-        seg_count_x2: u16,
-        search_range: u16,
-        entry_selector: u16,
-        range_shift: u16,
         end_code: Vec<u16>,
         start_code: Vec<u16>,
         id_delta: Vec<i16>,
@@ -173,12 +168,7 @@ impl CmapSubtable {
         glyph_id_array: Vec<u16>,
     ) -> Self {
         Self::Format4(Cmap4::new(
-            length,
             language,
-            seg_count_x2,
-            search_range,
-            entry_selector,
-            range_shift,
             end_code,
             start_code,
             id_delta,
@@ -233,13 +223,8 @@ impl CmapSubtable {
     }
 
     /// Construct a new `Cmap12` subtable
-    pub fn format_12(
-        length: u32,
-        language: u32,
-        num_groups: u32,
-        groups: Vec<SequentialMapGroup>,
-    ) -> Self {
-        Self::Format12(Cmap12::new(length, language, num_groups, groups))
+    pub fn format_12(language: u32, groups: Vec<SequentialMapGroup>) -> Self {
+        Self::Format12(Cmap12::new(language, groups))
     }
 
     /// Construct a new `Cmap13` subtable
@@ -440,6 +425,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap0<'a>> for Cmap0 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap0<'a>> for Cmap0 {}
 
 impl<'a> FontRead<'a> for Cmap0 {
@@ -501,6 +487,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap2<'a>> for Cmap2 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap2<'a>> for Cmap2 {}
 
 impl<'a> FontRead<'a> for Cmap2 {
@@ -566,23 +553,9 @@ impl FromObjRef<read_fonts::tables::cmap::SubHeader> for SubHeader {
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cmap4 {
-    /// This is the length in bytes of the subtable.
-    pub length: u16,
     /// For requirements on use of the language field, see “Use of
     /// the language field in 'cmap' subtables” in this document.
     pub language: u16,
-    /// 2 × segCount.
-    pub seg_count_x2: u16,
-    /// Maximum power of 2 less than or equal to segCount, times 2
-    /// ((2**floor(log2(segCount))) * 2, where “**” is an
-    /// exponentiation operator)
-    pub search_range: u16,
-    /// Log2 of the maximum power of 2 less than or equal to numTables
-    /// (log2(searchRange/2), which is equal to floor(log2(segCount)))
-    pub entry_selector: u16,
-    /// segCount times 2, minus searchRange ((segCount * 2) -
-    /// searchRange)
-    pub range_shift: u16,
     /// End characterCode for each segment, last=0xFFFF.
     pub end_code: Vec<u16>,
     /// Start character code for each segment.
@@ -597,14 +570,8 @@ pub struct Cmap4 {
 
 impl Cmap4 {
     /// Construct a new `Cmap4`
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        length: u16,
         language: u16,
-        seg_count_x2: u16,
-        search_range: u16,
-        entry_selector: u16,
-        range_shift: u16,
         end_code: Vec<u16>,
         start_code: Vec<u16>,
         id_delta: Vec<i16>,
@@ -612,12 +579,7 @@ impl Cmap4 {
         glyph_id_array: Vec<u16>,
     ) -> Self {
         Self {
-            length,
             language,
-            seg_count_x2,
-            search_range,
-            entry_selector,
-            range_shift,
             end_code: end_code.into_iter().map(Into::into).collect(),
             start_code: start_code.into_iter().map(Into::into).collect(),
             id_delta: id_delta.into_iter().map(Into::into).collect(),
@@ -631,12 +593,12 @@ impl FontWrite for Cmap4 {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         (4 as u16).write_into(writer);
-        self.length.write_into(writer);
+        (self.compute_length() as u16).write_into(writer);
         self.language.write_into(writer);
-        self.seg_count_x2.write_into(writer);
-        self.search_range.write_into(writer);
-        self.entry_selector.write_into(writer);
-        self.range_shift.write_into(writer);
+        (u16::try_from(2 * array_len(&self.end_code)).unwrap()).write_into(writer);
+        (self.compute_search_range() as u16).write_into(writer);
+        (self.compute_entry_selector() as u16).write_into(writer);
+        (self.compute_range_shift() as u16).write_into(writer);
         self.end_code.write_into(writer);
         (0 as u16).write_into(writer);
         self.start_code.write_into(writer);
@@ -657,12 +619,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap4<'a>> for Cmap4 {
     fn from_obj_ref(obj: &read_fonts::tables::cmap::Cmap4<'a>, _: FontData) -> Self {
         let offset_data = obj.offset_data();
         Cmap4 {
-            length: obj.length(),
             language: obj.language(),
-            seg_count_x2: obj.seg_count_x2(),
-            search_range: obj.search_range(),
-            entry_selector: obj.entry_selector(),
-            range_shift: obj.range_shift(),
             end_code: obj.end_code().to_owned_obj(offset_data),
             start_code: obj.start_code().to_owned_obj(offset_data),
             id_delta: obj.id_delta().to_owned_obj(offset_data),
@@ -672,6 +629,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap4<'a>> for Cmap4 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap4<'a>> for Cmap4 {}
 
 impl<'a> FontRead<'a> for Cmap4 {
@@ -756,6 +714,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap6<'a>> for Cmap6 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap6<'a>> for Cmap6 {}
 
 impl<'a> FontRead<'a> for Cmap6 {
@@ -844,6 +803,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap8<'a>> for Cmap8 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap8<'a>> for Cmap8 {}
 
 impl<'a> FontRead<'a> for Cmap8 {
@@ -973,6 +933,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap10<'a>> for Cmap10 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap10<'a>> for Cmap10 {}
 
 impl<'a> FontRead<'a> for Cmap10 {
@@ -985,29 +946,18 @@ impl<'a> FontRead<'a> for Cmap10 {
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cmap12 {
-    /// Byte length of this subtable (including the header)
-    pub length: u32,
     /// For requirements on use of the language field, see “Use of
     /// the language field in 'cmap' subtables” in this document.
     pub language: u32,
-    /// Number of groupings which follow
-    pub num_groups: u32,
     /// Array of SequentialMapGroup records.
     pub groups: Vec<SequentialMapGroup>,
 }
 
 impl Cmap12 {
     /// Construct a new `Cmap12`
-    pub fn new(
-        length: u32,
-        language: u32,
-        num_groups: u32,
-        groups: Vec<SequentialMapGroup>,
-    ) -> Self {
+    pub fn new(language: u32, groups: Vec<SequentialMapGroup>) -> Self {
         Self {
-            length,
             language,
-            num_groups,
             groups: groups.into_iter().map(Into::into).collect(),
         }
     }
@@ -1018,9 +968,9 @@ impl FontWrite for Cmap12 {
     fn write_into(&self, writer: &mut TableWriter) {
         (12 as u16).write_into(writer);
         (0 as u16).write_into(writer);
-        self.length.write_into(writer);
+        (self.compute_length() as u32).write_into(writer);
         self.language.write_into(writer);
-        self.num_groups.write_into(writer);
+        (u32::try_from(array_len(&self.groups)).unwrap()).write_into(writer);
         self.groups.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -1045,14 +995,13 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap12<'a>> for Cmap12 {
     fn from_obj_ref(obj: &read_fonts::tables::cmap::Cmap12<'a>, _: FontData) -> Self {
         let offset_data = obj.offset_data();
         Cmap12 {
-            length: obj.length(),
             language: obj.language(),
-            num_groups: obj.num_groups(),
             groups: obj.groups().to_owned_obj(offset_data),
         }
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap12<'a>> for Cmap12 {}
 
 impl<'a> FontRead<'a> for Cmap12 {
@@ -1128,6 +1077,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap13<'a>> for Cmap13 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap13<'a>> for Cmap13 {}
 
 impl<'a> FontRead<'a> for Cmap13 {
@@ -1249,6 +1199,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::Cmap14<'a>> for Cmap14 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::Cmap14<'a>> for Cmap14 {}
 
 impl<'a> FontRead<'a> for Cmap14 {
@@ -1376,6 +1327,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::DefaultUvs<'a>> for DefaultUvs {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::DefaultUvs<'a>> for DefaultUvs {}
 
 impl<'a> FontRead<'a> for DefaultUvs {
@@ -1435,6 +1387,7 @@ impl<'a> FromObjRef<read_fonts::tables::cmap::NonDefaultUvs<'a>> for NonDefaultU
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::cmap::NonDefaultUvs<'a>> for NonDefaultUvs {}
 
 impl<'a> FontRead<'a> for NonDefaultUvs {

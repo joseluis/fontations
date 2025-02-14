@@ -13,21 +13,30 @@ pub struct VorgMarker {
 }
 
 impl VorgMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn default_vert_origin_y_byte_range(&self) -> Range<usize> {
+
+    pub fn default_vert_origin_y_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn num_vert_origin_y_metrics_byte_range(&self) -> Range<usize> {
+
+    pub fn num_vert_origin_y_metrics_byte_range(&self) -> Range<usize> {
         let start = self.default_vert_origin_y_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn vert_origin_y_metrics_byte_range(&self) -> Range<usize> {
+
+    pub fn vert_origin_y_metrics_byte_range(&self) -> Range<usize> {
         let start = self.num_vert_origin_y_metrics_byte_range().end;
         start..start + self.vert_origin_y_metrics_byte_len
+    }
+}
+
+impl MinByteRange for VorgMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.vert_origin_y_metrics_byte_range().end
     }
 }
 
@@ -55,6 +64,7 @@ impl<'a> FontRead<'a> for Vorg<'a> {
 /// The [VORG (Vertical Origin)](https://docs.microsoft.com/en-us/typography/opentype/spec/vorg) table.
 pub type Vorg<'a> = TableRef<'a, VorgMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Vorg<'a> {
     /// Major/minor version number. Set to 1.0.
     pub fn version(&self) -> MajorMinor {
@@ -113,6 +123,7 @@ impl<'a> SomeTable<'a> for Vorg<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Vorg<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

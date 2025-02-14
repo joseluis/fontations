@@ -80,9 +80,10 @@
 
 mod autohint;
 mod cff;
-mod common;
 mod glyf;
 mod hint;
+mod hint_reliant;
+mod metrics;
 mod path;
 mod unscaled;
 
@@ -92,12 +93,11 @@ mod testing;
 pub mod error;
 pub mod pen;
 
-use common::OutlinesCommon;
-
 pub use autohint::GlyphStyles;
 pub use hint::{
     Engine, HintingInstance, HintingMode, HintingOptions, LcdLayout, SmoothMode, Target,
 };
+use metrics::GlyphHMetrics;
 use raw::FontRef;
 #[doc(inline)]
 pub use {error::DrawError, pen::OutlinePen};
@@ -110,6 +110,10 @@ use super::{
 use core::fmt::Debug;
 use pen::PathStyle;
 use read_fonts::{types::GlyphId, TableProvider};
+
+#[cfg(feature = "libm")]
+#[allow(unused_imports)]
+use core_maths::CoreFloat;
 
 /// Source format for an outline glyph.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -360,13 +364,19 @@ impl<'a> OutlineGlyph<'a> {
                         is_pedantic,
                     )
                 } else {
-                    self.draw_unhinted(
+                    let mut metrics = self.draw_unhinted(
                         hinting_instance.size(),
                         hinting_instance.location(),
                         settings.memory,
                         settings.path_style,
                         pen,
-                    )
+                    )?;
+                    // Round advance width when hinting is requested, even if
+                    // the instance is disabled.
+                    if let Some(advance) = metrics.advance_width.as_mut() {
+                        *advance = advance.round();
+                    }
+                    Ok(metrics)
                 }
             }
             (DrawInstance::Hinted { .. }, PathStyle::HarfBuzz) => {
@@ -469,17 +479,16 @@ impl<'a> OutlineGlyph<'a> {
                 let mut adapter = unscaled::UnscaledPenAdapter::new(sink);
                 cff.draw(&subfont, *glyph_id, coords, false, &mut adapter)?;
                 adapter.finish()?;
-                let advance = cff.common.advance_width(*glyph_id, coords);
+                let advance = cff.glyph_metrics.advance_width(*glyph_id, coords);
                 Ok(advance)
             }
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn outlines_common(&self) -> &OutlinesCommon<'a> {
+    pub(crate) fn font(&self) -> &FontRef<'a> {
         match &self.kind {
-            OutlineKind::Glyf(glyf, ..) => &glyf.common,
-            OutlineKind::Cff(cff, ..) => &cff.common,
+            OutlineKind::Glyf(glyf, ..) => &glyf.font,
+            OutlineKind::Cff(cff, ..) => &cff.font,
         }
     }
 
@@ -520,14 +529,10 @@ pub struct OutlineGlyphCollection<'a> {
 impl<'a> OutlineGlyphCollection<'a> {
     /// Creates a new outline collection for the given font.
     pub fn new(font: &FontRef<'a>) -> Self {
-        let kind = if let Some(common) = OutlinesCommon::new(font) {
-            if let Some(glyf) = glyf::Outlines::new(&common) {
-                OutlineCollectionKind::Glyf(glyf)
-            } else if let Some(cff) = cff::Outlines::new(&common) {
-                OutlineCollectionKind::Cff(cff)
-            } else {
-                OutlineCollectionKind::None
-            }
+        let kind = if let Some(glyf) = glyf::Outlines::new(font) {
+            OutlineCollectionKind::Glyf(glyf)
+        } else if let Some(cff) = cff::Outlines::new(font) {
+            OutlineCollectionKind::Cff(cff)
         } else {
             OutlineCollectionKind::None
         };
@@ -540,16 +545,15 @@ impl<'a> OutlineGlyphCollection<'a> {
     /// Returns `None` if the font does not contain outlines in the requested
     /// format.
     pub fn with_format(font: &FontRef<'a>, format: OutlineGlyphFormat) -> Option<Self> {
-        let common = OutlinesCommon::new(font)?;
         let kind = match format {
-            OutlineGlyphFormat::Glyf => OutlineCollectionKind::Glyf(glyf::Outlines::new(&common)?),
+            OutlineGlyphFormat::Glyf => OutlineCollectionKind::Glyf(glyf::Outlines::new(font)?),
             OutlineGlyphFormat::Cff => {
                 let upem = font.head().ok()?.units_per_em();
-                OutlineCollectionKind::Cff(cff::Outlines::from_cff(&common, upem)?)
+                OutlineCollectionKind::Cff(cff::Outlines::from_cff(font, upem)?)
             }
             OutlineGlyphFormat::Cff2 => {
                 let upem = font.head().ok()?.units_per_em();
-                OutlineCollectionKind::Cff(cff::Outlines::from_cff2(&common, upem)?)
+                OutlineCollectionKind::Cff(cff::Outlines::from_cff2(font, upem)?)
             }
         };
         Some(Self { kind })
@@ -615,10 +619,31 @@ impl<'a> OutlineGlyphCollection<'a> {
         }
     }
 
-    pub(crate) fn common(&self) -> Option<&OutlinesCommon<'a>> {
+    /// Returns true when the interpreter engine _must_ be used for hinting
+    /// this set of outlines to produce correct results.
+    ///
+    /// This corresponds so FreeType's `FT_FACE_FLAG_TRICKY` face flag. See
+    /// the documentation for that [flag](https://freetype.org/freetype2/docs/reference/ft2-face_creation.html#ft_face_flag_xxx)
+    /// for more detail.
+    ///
+    /// When this returns `true`, you should construct a [`HintingInstance`]
+    /// with [`HintingOptions::engine`] set to [`Engine::Interpreter`] and
+    /// [`HintingOptions::target`] set to [`Target::Mono`].
+    ///
+    /// # Performance
+    /// This digs through the name table and potentially computes checksums
+    /// so it may be slow. You should cache the result of this function if
+    /// possible.
+    pub fn require_interpreter(&self) -> bool {
+        self.font()
+            .map(|font| hint_reliant::require_interpreter(font))
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn font(&self) -> Option<&FontRef<'a>> {
         match &self.kind {
-            OutlineCollectionKind::Glyf(glyf) => Some(&glyf.common),
-            OutlineCollectionKind::Cff(cff) => Some(&cff.common),
+            OutlineCollectionKind::Glyf(glyf) => Some(&glyf.font),
+            OutlineCollectionKind::Cff(cff) => Some(&cff.font),
             _ => None,
         }
     }
@@ -1349,9 +1374,11 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "spec_next")]
     const CUBIC_GLYPH: GlyphId = GlyphId::new(2);
 
     #[test]
+    #[cfg(feature = "spec_next")]
     fn draw_cubic() {
         let font = FontRef::new(font_test_data::CUBIC_GLYF).unwrap();
         assert_glyph_path_start_with(

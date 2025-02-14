@@ -83,6 +83,12 @@ macro_rules! fixed_impl {
                 Self(self.0.saturating_add(other.0))
             }
 
+            /// Checked addition.
+            #[inline(always)]
+            pub fn checked_add(self, other: Self) -> Option<Self> {
+                self.0.checked_add(other.0).map(|inner| Self(inner))
+            }
+
             /// Wrapping substitution.
             #[inline(always)]
             pub const fn wrapping_sub(self, other: Self) -> Self {
@@ -106,8 +112,7 @@ macro_rules! fixed_impl {
             type Output = Self;
             #[inline(always)]
             fn add(self, other: Self) -> Self {
-                // same overflow semantics as std: panic in debug, wrap in release
-                Self(self.0 + other.0)
+                Self(self.0.wrapping_add(other.0))
             }
         }
 
@@ -122,7 +127,7 @@ macro_rules! fixed_impl {
             type Output = Self;
             #[inline(always)]
             fn sub(self, other: Self) -> Self {
-                Self(self.0 - other.0)
+                Self(self.0.wrapping_sub(other.0))
             }
         }
 

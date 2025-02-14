@@ -12,13 +12,20 @@ pub struct CountAll16Marker {
 }
 
 impl CountAll16Marker {
-    fn some_field_byte_range(&self) -> Range<usize> {
+    pub fn some_field_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn remainder_byte_range(&self) -> Range<usize> {
+
+    pub fn remainder_byte_range(&self) -> Range<usize> {
         let start = self.some_field_byte_range().end;
         start..start + self.remainder_byte_len
+    }
+}
+
+impl MinByteRange for CountAll16Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.remainder_byte_range().end
     }
 }
 
@@ -34,6 +41,7 @@ impl<'a> FontRead<'a> for CountAll16<'a> {
 
 pub type CountAll16<'a> = TableRef<'a, CountAll16Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> CountAll16<'a> {
     pub fn some_field(&self) -> u16 {
         let range = self.shape.some_field_byte_range();
@@ -61,6 +69,7 @@ impl<'a> SomeTable<'a> for CountAll16<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for CountAll16<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -74,13 +83,20 @@ pub struct CountAll32Marker {
 }
 
 impl CountAll32Marker {
-    fn some_field_byte_range(&self) -> Range<usize> {
+    pub fn some_field_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn remainder_byte_range(&self) -> Range<usize> {
+
+    pub fn remainder_byte_range(&self) -> Range<usize> {
         let start = self.some_field_byte_range().end;
         start..start + self.remainder_byte_len
+    }
+}
+
+impl MinByteRange for CountAll32Marker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.remainder_byte_range().end
     }
 }
 
@@ -96,6 +112,7 @@ impl<'a> FontRead<'a> for CountAll32<'a> {
 
 pub type CountAll32<'a> = TableRef<'a, CountAll32Marker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> CountAll32<'a> {
     pub fn some_field(&self) -> u16 {
         let range = self.shape.some_field_byte_range();
@@ -123,6 +140,7 @@ impl<'a> SomeTable<'a> for CountAll32<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for CountAll32<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

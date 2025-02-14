@@ -11,73 +11,95 @@ use crate::codegen_prelude::*;
 pub struct HheaMarker {}
 
 impl HheaMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn ascender_byte_range(&self) -> Range<usize> {
+
+    pub fn ascender_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + FWord::RAW_BYTE_LEN
     }
-    fn descender_byte_range(&self) -> Range<usize> {
+
+    pub fn descender_byte_range(&self) -> Range<usize> {
         let start = self.ascender_byte_range().end;
         start..start + FWord::RAW_BYTE_LEN
     }
-    fn line_gap_byte_range(&self) -> Range<usize> {
+
+    pub fn line_gap_byte_range(&self) -> Range<usize> {
         let start = self.descender_byte_range().end;
         start..start + FWord::RAW_BYTE_LEN
     }
-    fn advance_width_max_byte_range(&self) -> Range<usize> {
+
+    pub fn advance_width_max_byte_range(&self) -> Range<usize> {
         let start = self.line_gap_byte_range().end;
         start..start + UfWord::RAW_BYTE_LEN
     }
-    fn min_left_side_bearing_byte_range(&self) -> Range<usize> {
+
+    pub fn min_left_side_bearing_byte_range(&self) -> Range<usize> {
         let start = self.advance_width_max_byte_range().end;
         start..start + FWord::RAW_BYTE_LEN
     }
-    fn min_right_side_bearing_byte_range(&self) -> Range<usize> {
+
+    pub fn min_right_side_bearing_byte_range(&self) -> Range<usize> {
         let start = self.min_left_side_bearing_byte_range().end;
         start..start + FWord::RAW_BYTE_LEN
     }
-    fn x_max_extent_byte_range(&self) -> Range<usize> {
+
+    pub fn x_max_extent_byte_range(&self) -> Range<usize> {
         let start = self.min_right_side_bearing_byte_range().end;
         start..start + FWord::RAW_BYTE_LEN
     }
-    fn caret_slope_rise_byte_range(&self) -> Range<usize> {
+
+    pub fn caret_slope_rise_byte_range(&self) -> Range<usize> {
         let start = self.x_max_extent_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn caret_slope_run_byte_range(&self) -> Range<usize> {
+
+    pub fn caret_slope_run_byte_range(&self) -> Range<usize> {
         let start = self.caret_slope_rise_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn caret_offset_byte_range(&self) -> Range<usize> {
+
+    pub fn caret_offset_byte_range(&self) -> Range<usize> {
         let start = self.caret_slope_run_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn reserved1_byte_range(&self) -> Range<usize> {
+
+    pub fn reserved1_byte_range(&self) -> Range<usize> {
         let start = self.caret_offset_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn reserved2_byte_range(&self) -> Range<usize> {
+
+    pub fn reserved2_byte_range(&self) -> Range<usize> {
         let start = self.reserved1_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn reserved3_byte_range(&self) -> Range<usize> {
+
+    pub fn reserved3_byte_range(&self) -> Range<usize> {
         let start = self.reserved2_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn reserved4_byte_range(&self) -> Range<usize> {
+
+    pub fn reserved4_byte_range(&self) -> Range<usize> {
         let start = self.reserved3_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn metric_data_format_byte_range(&self) -> Range<usize> {
+
+    pub fn metric_data_format_byte_range(&self) -> Range<usize> {
         let start = self.reserved4_byte_range().end;
         start..start + i16::RAW_BYTE_LEN
     }
-    fn number_of_long_metrics_byte_range(&self) -> Range<usize> {
+
+    pub fn number_of_h_metrics_byte_range(&self) -> Range<usize> {
         let start = self.metric_data_format_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
+    }
+}
+
+impl MinByteRange for HheaMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.number_of_h_metrics_byte_range().end
     }
 }
 
@@ -113,6 +135,7 @@ impl<'a> FontRead<'a> for Hhea<'a> {
 /// [hhea](https://docs.microsoft.com/en-us/typography/opentype/spec/hhea) Horizontal Header Table
 pub type Hhea<'a> = TableRef<'a, HheaMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Hhea<'a> {
     /// The major/minor version (1, 0)
     pub fn version(&self) -> MajorMinor {
@@ -192,9 +215,9 @@ impl<'a> Hhea<'a> {
         self.data.read_at(range.start).unwrap()
     }
 
-    /// Number of LongMetric entries in 'hmtx'/'vmtx' table
-    pub fn number_of_long_metrics(&self) -> u16 {
-        let range = self.shape.number_of_long_metrics_byte_range();
+    /// Number of hMetric entries in 'hmtx' table
+    pub fn number_of_h_metrics(&self) -> u16 {
+        let range = self.shape.number_of_h_metrics_byte_range();
         self.data.read_at(range.start).unwrap()
     }
 }
@@ -225,8 +248,8 @@ impl<'a> SomeTable<'a> for Hhea<'a> {
             10usize => Some(Field::new("caret_offset", self.caret_offset())),
             11usize => Some(Field::new("metric_data_format", self.metric_data_format())),
             12usize => Some(Field::new(
-                "number_of_long_metrics",
-                self.number_of_long_metrics(),
+                "number_of_h_metrics",
+                self.number_of_h_metrics(),
             )),
             _ => None,
         }
@@ -234,6 +257,7 @@ impl<'a> SomeTable<'a> for Hhea<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Hhea<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

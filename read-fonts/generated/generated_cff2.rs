@@ -15,33 +15,45 @@ pub struct Cff2HeaderMarker {
 }
 
 impl Cff2HeaderMarker {
-    fn major_version_byte_range(&self) -> Range<usize> {
+    pub fn major_version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn minor_version_byte_range(&self) -> Range<usize> {
+
+    pub fn minor_version_byte_range(&self) -> Range<usize> {
         let start = self.major_version_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn header_size_byte_range(&self) -> Range<usize> {
+
+    pub fn header_size_byte_range(&self) -> Range<usize> {
         let start = self.minor_version_byte_range().end;
         start..start + u8::RAW_BYTE_LEN
     }
-    fn top_dict_length_byte_range(&self) -> Range<usize> {
+
+    pub fn top_dict_length_byte_range(&self) -> Range<usize> {
         let start = self.header_size_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn _padding_byte_range(&self) -> Range<usize> {
+
+    pub fn _padding_byte_range(&self) -> Range<usize> {
         let start = self.top_dict_length_byte_range().end;
         start..start + self._padding_byte_len
     }
-    fn top_dict_data_byte_range(&self) -> Range<usize> {
+
+    pub fn top_dict_data_byte_range(&self) -> Range<usize> {
         let start = self._padding_byte_range().end;
         start..start + self.top_dict_data_byte_len
     }
-    fn trailing_data_byte_range(&self) -> Range<usize> {
+
+    pub fn trailing_data_byte_range(&self) -> Range<usize> {
         let start = self.top_dict_data_byte_range().end;
         start..start + self.trailing_data_byte_len
+    }
+}
+
+impl MinByteRange for Cff2HeaderMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.trailing_data_byte_range().end
     }
 }
 
@@ -73,6 +85,7 @@ impl<'a> FontRead<'a> for Cff2Header<'a> {
 /// [Compact Font Format (CFF) version 2](https://learn.microsoft.com/en-us/typography/opentype/spec/cff2) table header
 pub type Cff2Header<'a> = TableRef<'a, Cff2HeaderMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Cff2Header<'a> {
     /// Format major version (set to 2).
     pub fn major_version(&self) -> u8 {
@@ -137,6 +150,7 @@ impl<'a> SomeTable<'a> for Cff2Header<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Cff2Header<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

@@ -9,10 +9,12 @@ mod outline;
 #[allow(unused_imports)]
 use core_maths::CoreFloat;
 
+use deltas::AvailableVarMetrics;
 pub use hint::{HintError, HintInstance, HintOutline};
 pub use outline::{Outline, ScaledOutline};
+use raw::{FontRef, ReadError};
 
-use super::{common::OutlinesCommon, DrawError, Hinting};
+use super::{DrawError, GlyphHMetrics, Hinting};
 use crate::GLYF_COMPOSITE_RECURSION_LIMIT;
 use memory::{FreeTypeOutlineMemory, HarfBuzzOutlineMemory};
 
@@ -35,7 +37,8 @@ pub const PHANTOM_POINT_COUNT: usize = 4;
 /// Scaler state for TrueType outlines.
 #[derive(Clone)]
 pub struct Outlines<'a> {
-    pub(crate) common: OutlinesCommon<'a>,
+    pub(crate) font: FontRef<'a>,
+    pub(crate) glyph_metrics: GlyphHMetrics<'a>,
     loca: Loca<'a>,
     glyf: Glyf<'a>,
     gvar: Option<Gvar<'a>>,
@@ -51,18 +54,25 @@ pub struct Outlines<'a> {
     glyph_count: u16,
     units_per_em: u16,
     os2_vmetrics: [i16; 2],
-    has_var_lsb: bool,
+    var_metrics: AvailableVarMetrics,
     prefer_interpreter: bool,
 }
 
 impl<'a> Outlines<'a> {
-    pub fn new(common: &OutlinesCommon<'a>) -> Option<Self> {
-        let font = &common.font;
-        let has_var_lsb = common
-            .hvar
-            .as_ref()
-            .map(|hvar| hvar.lsb_mapping().is_some())
-            .unwrap_or_default();
+    pub fn new(font: &FontRef<'a>) -> Option<Self> {
+        let loca = font.loca(None).ok()?;
+        let glyf = font.glyf().ok()?;
+        let glyph_metrics = GlyphHMetrics::new(font)?;
+        let var_metrics = match glyph_metrics.hvar.as_ref() {
+            Some(hvar) => {
+                if hvar.lsb_mapping().is_some() {
+                    AvailableVarMetrics::All
+                } else {
+                    AvailableVarMetrics::Advances
+                }
+            }
+            None => AvailableVarMetrics::None,
+        };
         let (
             glyph_count,
             max_function_defs,
@@ -108,11 +118,12 @@ impl<'a> Outlines<'a> {
         // Copy FreeType's logic on whether to use the interpreter:
         // <https://gitlab.freedesktop.org/freetype/freetype/-/blob/57617782464411201ce7bbc93b086c1b4d7d84a5/src/base/ftobjs.c#L1001>
         let prefer_interpreter = !(max_instructions == 0 && fpgm.is_empty() && prep.is_empty());
-        let cvt_len = common.cvt().len() as u32;
+        let cvt_len = font.cvt().map(|cvt| cvt.len() as u32).unwrap_or_default();
         Some(Self {
-            common: common.clone(),
-            loca: font.loca(None).ok()?,
-            glyf: font.glyf().ok()?,
+            font: font.clone(),
+            glyph_metrics,
+            loca,
+            glyf,
             gvar: font.gvar().ok(),
             hdmx: font.hdmx().ok(),
             fpgm,
@@ -126,7 +137,7 @@ impl<'a> Outlines<'a> {
             glyph_count,
             units_per_em: font.head().ok()?.units_per_em(),
             os2_vmetrics,
-            has_var_lsb,
+            var_metrics,
             prefer_interpreter,
         })
     }
@@ -150,13 +161,10 @@ impl<'a> Outlines<'a> {
             ..Default::default()
         };
         let glyph = self.loca.get_glyf(glyph_id, &self.glyf)?;
-        if glyph.is_none() {
-            return Ok(outline);
+        if let Some(glyph) = glyph.as_ref() {
+            self.outline_rec(glyph, &mut outline, 0, 0)?;
         }
-        self.outline_rec(glyph.as_ref().unwrap(), &mut outline, 0, 0)?;
-        if outline.points != 0 {
-            outline.points += PHANTOM_POINT_COUNT;
-        }
+        outline.points += PHANTOM_POINT_COUNT;
         outline.max_stack = self.max_stack_elements as usize;
         outline.cvt_count = self.cvt_len as usize;
         outline.storage_count = self.max_storage as usize;
@@ -179,7 +187,7 @@ impl<'a> Outlines<'a> {
     }
 }
 
-impl<'a> Outlines<'a> {
+impl Outlines<'_> {
     fn outline_rec(
         &self,
         glyph: &Glyph,
@@ -286,8 +294,8 @@ trait Scaler {
         };
         let outlines = self.outlines();
         let coords: &[F2Dot14] = self.coords();
-        let lsb = outlines.common.lsb(glyph_id, coords);
-        let advance = outlines.common.advance_width(glyph_id, coords);
+        let lsb = outlines.glyph_metrics.lsb(glyph_id, coords);
+        let advance = outlines.glyph_metrics.advance_width(glyph_id, coords);
         let [ascent, descent] = outlines.os2_vmetrics.map(|x| x as i32);
         let tsb = ascent - bounds[3] as i32;
         let vadvance = ascent - descent;
@@ -329,6 +337,7 @@ impl<'a> HarfBuzzScaler<'a> {
         ppem: Option<f32>,
         coords: &'a [F2Dot14],
     ) -> Result<Self, DrawError> {
+        outline.ensure_point_count_limit()?;
         let (is_scaled, scale) = outlines.compute_scale(ppem);
         let memory =
             HarfBuzzOutlineMemory::new(outline, buf).ok_or(DrawError::InsufficientMemory)?;
@@ -392,6 +401,7 @@ impl<'a> FreeTypeScaler<'a> {
         ppem: Option<f32>,
         coords: &'a [F2Dot14],
     ) -> Result<Self, DrawError> {
+        outline.ensure_point_count_limit()?;
         let (is_scaled, scale) = outlines.compute_scale(ppem);
         let memory = FreeTypeOutlineMemory::new(outline, buf, Hinting::None)
             .ok_or(DrawError::InsufficientMemory)?;
@@ -421,6 +431,7 @@ impl<'a> FreeTypeScaler<'a> {
         hinter: &'a HintInstance,
         pedantic_hinting: bool,
     ) -> Result<Self, DrawError> {
+        outline.ensure_point_count_limit()?;
         let (is_scaled, scale) = outlines.compute_scale(ppem);
         let memory = FreeTypeOutlineMemory::new(outline, buf, Hinting::Embedded)
             .ok_or(DrawError::InsufficientMemory)?;
@@ -448,17 +459,31 @@ impl<'a> FreeTypeScaler<'a> {
         glyph_id: GlyphId,
     ) -> Result<ScaledOutline<'a, F26Dot6>, DrawError> {
         self.load(glyph, glyph_id, 0)?;
+        // Use hdmx if hinting is requested and backward compatibility mode
+        // is not enabled.
+        // <https://gitlab.freedesktop.org/freetype/freetype/-/blob/80a507a6b8e3d2906ad2c8ba69329bd2fb2a85ef/src/truetype/ttgload.c#L2559>
+        let hdmx_width = if self.is_hinted
+            && self
+                .hinter
+                .as_ref()
+                .map(|hinter| !hinter.backward_compatibility())
+                .unwrap_or(true)
+        {
+            self.outlines.hdmx_width(self.ppem, glyph_id)
+        } else {
+            None
+        };
         Ok(ScaledOutline::new(
             &mut self.memory.scaled[..self.point_count],
             self.phantom,
             &mut self.memory.flags[..self.point_count],
             &mut self.memory.contours[..self.contour_count],
-            self.outlines.hdmx_width(self.ppem, glyph_id),
+            hdmx_width,
         ))
     }
 }
 
-impl<'a> Scaler for FreeTypeScaler<'a> {
+impl Scaler for FreeTypeScaler<'_> {
     fn setup_phantom_points(
         &mut self,
         bounds: [i16; 4],
@@ -494,18 +519,18 @@ impl<'a> Scaler for FreeTypeScaler<'a> {
         // <https://gitlab.freedesktop.org/freetype/freetype/-/blob/57617782464411201ce7bbc93b086c1b4d7d84a5/src/truetype/ttgload.c#L1572>
         let scale = self.scale;
         let mut unscaled = self.phantom.map(|point| point.map(|x| x.to_bits()));
-        if self.outlines.common.hvar.is_none()
+        if self.outlines.glyph_metrics.hvar.is_none()
             && self.outlines.gvar.is_some()
             && !self.coords.is_empty()
         {
-            if let Ok(deltas) = self.outlines.gvar.as_ref().unwrap().phantom_point_deltas(
+            if let Ok(Some(deltas)) = self.outlines.gvar.as_ref().unwrap().phantom_point_deltas(
                 &self.outlines.glyf,
                 &self.outlines.loca,
                 self.coords,
                 glyph_id,
             ) {
-                unscaled[0].x += deltas[0].to_i32();
-                unscaled[1].x += deltas[1].to_i32();
+                unscaled[0] += deltas[0].map(Fixed::to_i32);
+                unscaled[1] += deltas[1].map(Fixed::to_i32);
             }
         }
         if self.is_scaled {
@@ -561,9 +586,19 @@ impl<'a> Scaler for FreeTypeScaler<'a> {
             .contours
             .get_mut(contours_start..contours_end)
             .ok_or(InsufficientMemory)?;
-        // Read the contour end points.
+        // Read the contour end points, ensuring that they are properly
+        // ordered.
+        let mut last_end_pt = 0;
         for (end_pt, contour) in contour_end_pts.iter().zip(contours.iter_mut()) {
-            *contour = end_pt.get();
+            let end_pt = end_pt.get();
+            if end_pt < last_end_pt {
+                return Err(ReadError::MalformedData(
+                    "unordered contour end points in TrueType glyph",
+                )
+                .into());
+            }
+            last_end_pt = end_pt;
+            *contour = end_pt;
         }
         // Adjust the running point/contour total counts
         self.point_count += point_count;
@@ -595,7 +630,7 @@ impl<'a> Scaler for FreeTypeScaler<'a> {
                 gvar,
                 glyph_id,
                 self.coords,
-                self.outlines.has_var_lsb,
+                self.outlines.var_metrics,
                 glyph,
                 iup_buffer,
                 deltas,
@@ -646,7 +681,7 @@ impl<'a> Scaler for FreeTypeScaler<'a> {
             }
         }
         // Commit our potentially modified phantom points.
-        if self.outlines.common.hvar.is_some() && self.is_hinted {
+        if self.outlines.glyph_metrics.hvar.is_some() && self.is_hinted {
             self.phantom[0] *= self.scale;
             self.phantom[1] *= self.scale;
         } else {
@@ -740,11 +775,14 @@ impl<'a> Scaler for FreeTypeScaler<'a> {
                 .get_mut(delta_base..delta_base + count)
                 .ok_or(InsufficientMemory)?;
             if deltas::composite_glyph(gvar, glyph_id, self.coords, &mut deltas[..]).is_ok() {
-                // If the font is missing variation data for LSBs in HVAR then we
-                // apply the delta to the first phantom point.
-                if !self.outlines.has_var_lsb {
-                    self.phantom[0].x += F26Dot6::from_bits(deltas[count - 4].x.to_i32());
-                }
+                // Apply selective deltas to phantom points.
+                self.outlines.var_metrics.phantom_deltas(
+                    &mut self.phantom,
+                    deltas,
+                    |phantom, delta| {
+                        phantom.x += F26Dot6::from_bits(delta.x.to_i32());
+                    },
+                );
                 have_deltas = true;
             }
             self.component_delta_count += count;
@@ -980,7 +1018,7 @@ impl<'a> Scaler for FreeTypeScaler<'a> {
     }
 }
 
-impl<'a> Scaler for HarfBuzzScaler<'a> {
+impl Scaler for HarfBuzzScaler<'_> {
     fn setup_phantom_points(
         &mut self,
         bounds: [i16; 4],
@@ -1015,18 +1053,18 @@ impl<'a> Scaler for HarfBuzzScaler<'a> {
         // FreeType version above but changed to use floating point
         let scale = self.scale.to_f32();
         let mut unscaled = self.phantom;
-        if self.outlines.common.hvar.is_none()
+        if self.outlines.glyph_metrics.hvar.is_none()
             && self.outlines.gvar.is_some()
             && !self.coords.is_empty()
         {
-            if let Ok(deltas) = self.outlines.gvar.as_ref().unwrap().phantom_point_deltas(
+            if let Ok(Some(deltas)) = self.outlines.gvar.as_ref().unwrap().phantom_point_deltas(
                 &self.outlines.glyf,
                 &self.outlines.loca,
                 self.coords,
                 glyph_id,
             ) {
-                unscaled[0].x += deltas[0].to_f32();
-                unscaled[1].x += deltas[1].to_f32();
+                unscaled[0] += deltas[0].map(Fixed::to_f32);
+                unscaled[1] += deltas[1].map(Fixed::to_f32);
             }
         }
         if self.is_scaled {
@@ -1105,7 +1143,7 @@ impl<'a> Scaler for HarfBuzzScaler<'a> {
                 gvar,
                 glyph_id,
                 self.coords,
-                self.outlines.has_var_lsb,
+                self.outlines.var_metrics,
                 glyph,
                 iup_buffer,
                 deltas,
@@ -1157,11 +1195,14 @@ impl<'a> Scaler for HarfBuzzScaler<'a> {
                 .get_mut(delta_base..delta_base + count)
                 .ok_or(InsufficientMemory)?;
             if deltas::composite_glyph(gvar, glyph_id, self.coords, &mut deltas[..]).is_ok() {
-                // If the font is missing variation data for LSBs in HVAR then we
-                // apply the delta to the first phantom point.
-                if !self.outlines.has_var_lsb {
-                    self.phantom[0].x += deltas[count - 4].x;
-                }
+                // Apply selective deltas to phantom points.
+                self.outlines.var_metrics.phantom_deltas(
+                    &mut self.phantom,
+                    deltas,
+                    |phantom, delta| {
+                        phantom.x += delta.x;
+                    },
+                );
                 have_deltas = true;
             }
             self.component_delta_count += count;
@@ -1275,16 +1316,44 @@ fn map_point(transform: [f32; 6], p: Point<f32>) -> Point<f32> {
     }
 }
 
+impl AvailableVarMetrics {
+    /// Calls `f` for each combination of phantom point and its associated
+    /// delta based on the available metrics present in `self`.
+    fn phantom_deltas<P, D>(
+        self,
+        phantom: &mut [Point<P>; 4],
+        deltas: &[Point<D>],
+        f: impl Fn(&mut Point<P>, &Point<D>),
+    ) {
+        match self {
+            Self::None => {
+                f(&mut phantom[0], &deltas[deltas.len() - 4]);
+                f(&mut phantom[1], &deltas[deltas.len() - 3]);
+            }
+            Self::Advances => {
+                f(&mut phantom[0], &deltas[deltas.len() - 4]);
+            }
+            Self::All => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::MetadataProvider;
-    use read_fonts::{FontRef, TableProvider};
+    use raw::{
+        tables::{
+            glyf::{CompositeGlyphFlags, Glyf, SimpleGlyphFlags},
+            loca::Loca,
+        },
+        FontRead, FontRef, TableProvider,
+    };
 
     #[test]
     fn overlap_flags() {
         let font = FontRef::new(font_test_data::VAZIRMATN_VAR).unwrap();
-        let scaler = Outlines::new(&OutlinesCommon::new(&font).unwrap()).unwrap();
+        let scaler = Outlines::new(&font).unwrap();
         let glyph_count = font.maxp().unwrap().num_glyphs();
         // GID 2 is a composite glyph with the overlap bit on a component
         // GID 3 is a simple glyph with the overlap bit on the first flag
@@ -1301,12 +1370,12 @@ mod tests {
     fn interpreter_preference() {
         // no instructions in this font...
         let font = FontRef::new(font_test_data::COLRV0V1).unwrap();
-        let outlines = Outlines::new(&OutlinesCommon::new(&font).unwrap()).unwrap();
+        let outlines = Outlines::new(&font).unwrap();
         // thus no preference for the interpreter
         assert!(!outlines.prefer_interpreter());
         // but this one has instructions...
         let font = FontRef::new(font_test_data::TTHINT_SUBSET).unwrap();
-        let outlines = Outlines::new(&OutlinesCommon::new(&font).unwrap()).unwrap();
+        let outlines = Outlines::new(&font).unwrap();
         // so let's use it
         assert!(outlines.prefer_interpreter());
     }
@@ -1314,23 +1383,118 @@ mod tests {
     #[test]
     fn empty_glyph_advance() {
         let font = FontRef::new(font_test_data::HVAR_WITH_TRUNCATED_ADVANCE_INDEX_MAP).unwrap();
-        let mut outlines = Outlines::new(&OutlinesCommon::new(&font).unwrap()).unwrap();
+        let mut outlines = Outlines::new(&font).unwrap();
         let coords = [F2Dot14::from_f32(0.5)];
         let ppem = Some(24.0);
         let gid = font.charmap().map(' ').unwrap();
         let outline = outlines.outline(gid).unwrap();
         // Make sure this is an empty outline since that's what we're testing
-        assert_eq!(outline.points, 0);
-        let scaler = FreeTypeScaler::unhinted(&outlines, &outline, &mut [], ppem, &coords).unwrap();
+        assert!(outline.glyph.is_none());
+        let mut buf = [0u8; 128];
+        let scaler =
+            FreeTypeScaler::unhinted(&outlines, &outline, &mut buf, ppem, &coords).unwrap();
         let scaled = scaler.scale(&outline.glyph, gid).unwrap();
         let advance_hvar = scaled.adjusted_advance_width();
-        // Set HVAR table to None to force loading metrics from gvar
-        outlines.common.hvar = None;
-        let scaler = FreeTypeScaler::unhinted(&outlines, &outline, &mut [], ppem, &coords).unwrap();
+        // Set HVAR to None and mark var metrics as missing so we pull deltas from gvar
+        outlines.glyph_metrics.hvar = None;
+        outlines.var_metrics = AvailableVarMetrics::None;
+        let scaler =
+            FreeTypeScaler::unhinted(&outlines, &outline, &mut buf, ppem, &coords).unwrap();
         let scaled = scaler.scale(&outline.glyph, gid).unwrap();
         let advance_gvar = scaled.adjusted_advance_width();
         // Make sure we have an advance and that the two are the same
         assert!(advance_hvar != F26Dot6::ZERO);
         assert_eq!(advance_hvar, advance_gvar);
+    }
+
+    #[test]
+    fn empty_glyphs_have_phantom_points_too() {
+        let font = FontRef::new(font_test_data::HVAR_WITH_TRUNCATED_ADVANCE_INDEX_MAP).unwrap();
+        let outlines = Outlines::new(&font).unwrap();
+        let gid = font.charmap().map(' ').unwrap();
+        let outline = outlines.outline(gid).unwrap();
+        assert!(outline.glyph.is_none());
+        assert_eq!(outline.points, PHANTOM_POINT_COUNT);
+    }
+
+    // Pull metric deltas from gvar when hvar is not present
+    // <https://github.com/googlefonts/fontations/issues/1311>
+    #[test]
+    fn missing_hvar_advance() {
+        let font = FontRef::new(font_test_data::HVAR_WITH_TRUNCATED_ADVANCE_INDEX_MAP).unwrap();
+        let mut outlines = Outlines::new(&font).unwrap();
+        let coords = [F2Dot14::from_f32(0.5)];
+        let ppem = Some(24.0);
+        let gid = font.charmap().map('A').unwrap();
+        let outline = outlines.outline(gid).unwrap();
+        let mut buf = [0u8; 1024];
+        let scaler =
+            FreeTypeScaler::unhinted(&outlines, &outline, &mut buf, ppem, &coords).unwrap();
+        let scaled = scaler.scale(&outline.glyph, gid).unwrap();
+        let advance_hvar = scaled.adjusted_advance_width();
+        // Set HVAR to None and mark var metrics as missing so we pull deltas from gvar
+        outlines.glyph_metrics.hvar = None;
+        outlines.var_metrics = AvailableVarMetrics::None;
+        let scaler =
+            FreeTypeScaler::unhinted(&outlines, &outline, &mut buf, ppem, &coords).unwrap();
+        let scaled = scaler.scale(&outline.glyph, gid).unwrap();
+        let advance_gvar = scaled.adjusted_advance_width();
+        // Make sure we have an advance and that the two are the same
+        assert!(advance_hvar != F26Dot6::ZERO);
+        assert_eq!(advance_hvar, advance_gvar);
+    }
+
+    // fuzzer overflow for composite glyph with too many total points
+    // <https://issues.oss-fuzz.com/issues/391753684
+    #[test]
+    fn composite_with_too_many_points() {
+        let font = FontRef::new(font_test_data::GLYF_COMPONENTS).unwrap();
+        let mut outlines = Outlines::new(&font).unwrap();
+        // Hack glyf and loca to build a glyph that contains more than 64k
+        // total points
+        let mut glyf_buf = font_test_data::bebuffer::BeBuffer::new();
+        // Make a component glyph with 40k points so we overflow the
+        // total limit in a composite
+        let simple_glyph_point_count = 40000;
+        glyf_buf = glyf_buf.push(1u16); // number of contours
+        glyf_buf = glyf_buf.extend([0i16; 4]); // bbox
+        glyf_buf = glyf_buf.push((simple_glyph_point_count - 1) as u16); // contour ends
+        glyf_buf = glyf_buf.push(0u16); // instruction count
+        for _ in 0..simple_glyph_point_count {
+            glyf_buf =
+                glyf_buf.push(SimpleGlyphFlags::X_SHORT_VECTOR | SimpleGlyphFlags::Y_SHORT_VECTOR);
+        }
+        // x/y coords
+        for _ in 0..simple_glyph_point_count * 2 {
+            glyf_buf = glyf_buf.push(0u8);
+        }
+        let glyph0_end = glyf_buf.len();
+        // Now make a composite with two components
+        glyf_buf = glyf_buf.push(-1i16); // negative signifies composite
+        glyf_buf = glyf_buf.extend([0i16; 4]); // bbox
+        for i in 0..2 {
+            let flags = if i == 0 {
+                CompositeGlyphFlags::MORE_COMPONENTS | CompositeGlyphFlags::ARGS_ARE_XY_VALUES
+            } else {
+                CompositeGlyphFlags::ARGS_ARE_XY_VALUES
+            };
+            glyf_buf = glyf_buf.push(flags); // component flag
+            glyf_buf = glyf_buf.push(0u16); // component gid
+            glyf_buf = glyf_buf.extend([0u8; 2]); // x/y offset
+        }
+        let glyph1_end = glyf_buf.len();
+        outlines.glyf = Glyf::read(glyf_buf.data().into()).unwrap();
+        // Now create a loca table
+        let mut loca_buf = font_test_data::bebuffer::BeBuffer::new();
+        loca_buf = loca_buf.extend([0u32, glyph0_end as u32, glyph1_end as u32]);
+        outlines.loca = Loca::read(loca_buf.data().into(), true).unwrap();
+        let gid = GlyphId::new(1);
+        let outline = outlines.outline(gid).unwrap();
+        let mut mem_buf = vec![0u8; outline.required_buffer_size(Default::default())];
+        // This outline has more than 64k points...
+        assert!(outline.points > u16::MAX as usize);
+        let result = FreeTypeScaler::unhinted(&outlines, &outline, &mut mem_buf, None, &[]);
+        // And we get an error instead of an overflow panic
+        assert!(matches!(result, Err(DrawError::TooManyPoints(_))));
     }
 }

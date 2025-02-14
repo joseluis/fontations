@@ -1,47 +1,70 @@
 //! try to define Subset trait so I can add methods for Hmtx
 //! TODO: make it generic for all tables
+mod base;
+mod cmap;
 mod cpal;
 mod fvar;
 mod glyf_loca;
 mod gpos;
 mod gsub;
 mod gvar;
+mod hdmx;
 mod head;
 mod hmtx;
+mod inc_bimap;
 mod layout;
 mod maxp;
 mod name;
+mod offset;
+mod offset_array;
 mod os2;
 mod parsing_util;
 mod post;
+mod sbix;
+pub mod serialize;
 mod stat;
+mod variations;
+mod vorg;
+use inc_bimap::IncBiMap;
 pub use parsing_util::{
-    parse_drop_tables, parse_name_ids, parse_name_languages, parse_unicodes, populate_gids,
+    parse_name_ids, parse_name_languages, parse_tag_list, parse_unicodes, populate_gids,
 };
 
 use fnv::FnvHashMap;
+use serialize::SerializeErrorFlags;
+use serialize::Serializer;
 use skrifa::MetadataProvider;
 use thiserror::Error;
-use write_fonts::read::{
-    collections::{int_set::Domain, IntSet},
-    tables::{
-        cff::Cff,
-        cff2::Cff2,
-        glyf::{Glyf, Glyph},
-        gpos::Gpos,
-        gsub::Gsub,
-        gvar::Gvar,
-        head::Head,
-        loca::Loca,
-        name::Name,
-        os2::Os2,
-        post::Post,
-    },
-    types::NameId,
-    FontRef, TableProvider, TopLevelTable,
-};
 use write_fonts::types::GlyphId;
 use write_fonts::types::Tag;
+use write_fonts::{
+    read::{
+        collections::{int_set::Domain, IntSet},
+        tables::{
+            base::Base,
+            cff::Cff,
+            cff2::Cff2,
+            cmap::{Cmap, CmapSubtable},
+            cvar::Cvar,
+            gasp,
+            glyf::{Glyf, Glyph},
+            gpos::Gpos,
+            gsub::Gsub,
+            gvar::Gvar,
+            hdmx::Hdmx,
+            head::Head,
+            loca::Loca,
+            name::Name,
+            os2::Os2,
+            post::Post,
+            sbix::Sbix,
+            vorg::Vorg,
+        },
+        types::NameId,
+        FontRef, TableProvider, TopLevelTable,
+    },
+    tables::cmap::PlatformId,
+};
 use write_fonts::{tables::hhea::Hhea, tables::hmtx::Hmtx, tables::maxp::Maxp, FontBuilder};
 
 const MAX_COMPOSITE_OPERATIONS_PER_GLYPH: u8 = 64;
@@ -50,6 +73,98 @@ const MAX_NESTING_LEVEL: u8 = 64;
 // this causes tests to fail with 'subtract with overflow error'.
 // See <https://github.com/googlefonts/fontations/issues/997>
 const MAX_GID: GlyphId = GlyphId::new(0xFFFFFF);
+
+// ref: <https://github.com/harfbuzz/harfbuzz/blob/021b44388667903d7bc9c92c924ad079f13b90ce/src/hb-subset-input.cc#L82>
+pub static DEFAULT_LAYOUT_FEATURES: &[Tag] = &[
+    // default shaper
+    // common
+    Tag::new(b"rvrn"),
+    Tag::new(b"ccmp"),
+    Tag::new(b"liga"),
+    Tag::new(b"locl"),
+    Tag::new(b"mark"),
+    Tag::new(b"mkmk"),
+    Tag::new(b"rlig"),
+    //fractions
+    Tag::new(b"frac"),
+    Tag::new(b"numr"),
+    Tag::new(b"dnom"),
+    // horizontal
+    Tag::new(b"calt"),
+    Tag::new(b"clig"),
+    Tag::new(b"curs"),
+    Tag::new(b"kern"),
+    Tag::new(b"rclt"),
+    //vertical
+    Tag::new(b"valt"),
+    Tag::new(b"vert"),
+    Tag::new(b"vkrn"),
+    Tag::new(b"vpal"),
+    Tag::new(b"vrt2"),
+    //ltr
+    Tag::new(b"ltra"),
+    Tag::new(b"ltrm"),
+    //rtl
+    Tag::new(b"rtla"),
+    Tag::new(b"rtlm"),
+    //random
+    Tag::new(b"rand"),
+    //justify
+    Tag::new(b"jalt"),
+    //east asian spacing
+    Tag::new(b"chws"),
+    Tag::new(b"vchw"),
+    Tag::new(b"halt"),
+    Tag::new(b"vhal"),
+    //private
+    Tag::new(b"Harf"),
+    Tag::new(b"HARF"),
+    Tag::new(b"Buzz"),
+    Tag::new(b"BUZZ"),
+    //complex shapers
+    //arabic
+    Tag::new(b"init"),
+    Tag::new(b"medi"),
+    Tag::new(b"fina"),
+    Tag::new(b"isol"),
+    Tag::new(b"med2"),
+    Tag::new(b"fin2"),
+    Tag::new(b"fin3"),
+    Tag::new(b"cswh"),
+    Tag::new(b"mset"),
+    Tag::new(b"stch"),
+    //hangul
+    Tag::new(b"ljmo"),
+    Tag::new(b"vjmo"),
+    Tag::new(b"tjmo"),
+    //tibetan
+    Tag::new(b"abvs"),
+    Tag::new(b"blws"),
+    Tag::new(b"abvm"),
+    Tag::new(b"blwm"),
+    //indic
+    Tag::new(b"nukt"),
+    Tag::new(b"akhn"),
+    Tag::new(b"rphf"),
+    Tag::new(b"rkrf"),
+    Tag::new(b"pref"),
+    Tag::new(b"blwf"),
+    Tag::new(b"half"),
+    Tag::new(b"abvf"),
+    Tag::new(b"pstf"),
+    Tag::new(b"cfar"),
+    Tag::new(b"vatu"),
+    Tag::new(b"cjct"),
+    Tag::new(b"init"),
+    Tag::new(b"pres"),
+    Tag::new(b"abvs"),
+    Tag::new(b"blws"),
+    Tag::new(b"psts"),
+    Tag::new(b"haln"),
+    Tag::new(b"dist"),
+    Tag::new(b"abvm"),
+    Tag::new(b"blwm"),
+];
 
 #[derive(Clone, Copy, Debug)]
 pub struct SubsetFlags(u16);
@@ -147,11 +262,14 @@ impl std::ops::BitOrAssign for SubsetFlags {
 #[derive(Default)]
 pub struct Plan {
     unicodes: IntSet<u32>,
+    glyphs_requested: IntSet<GlyphId>,
     glyphset_gsub: IntSet<GlyphId>,
     glyphset_colred: IntSet<GlyphId>,
     glyphset: IntSet<GlyphId>,
     //Old->New glyph id mapping,
     glyph_map: FnvHashMap<GlyphId, GlyphId>,
+    //New->Old glyph id mapping,
+    reverse_glyph_map: FnvHashMap<GlyphId, GlyphId>,
 
     new_to_old_gid_list: Vec<(GlyphId, GlyphId)>,
 
@@ -161,9 +279,12 @@ pub struct Plan {
     codepoint_to_glyph: FnvHashMap<u32, GlyphId>,
 
     subset_flags: SubsetFlags,
+    no_subset_tables: IntSet<Tag>,
     drop_tables: IntSet<Tag>,
     name_ids: IntSet<NameId>,
     name_languages: IntSet<u16>,
+    layout_scripts: IntSet<Tag>,
+    layout_features: IntSet<Tag>,
 
     //old->new feature index map
     gsub_features: FnvHashMap<u16, u16>,
@@ -173,31 +294,56 @@ pub struct Plan {
     colrv1_layers: FnvHashMap<u32, u32>,
     //old->new CPAL palette index map
     colr_palettes: FnvHashMap<u16, u16>,
+
+    os2_info: Os2Info,
+
+    //BASE table old variation index -> (New varidx, new delta) mapping
+    base_varidx_delta_map: FnvHashMap<u32, (u32, i32)>,
+    //BASE table varstore retained varidx mapping
+    base_varstore_inner_maps: Vec<IncBiMap>,
+}
+
+#[derive(Default)]
+struct Os2Info {
+    min_cmap_codepoint: u32,
+    max_cmap_codepoint: u32,
 }
 
 impl Plan {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         input_gids: &IntSet<GlyphId>,
         input_unicodes: &IntSet<u32>,
         font: &FontRef,
         flags: SubsetFlags,
         drop_tables: &IntSet<Tag>,
+        layout_scripts: &IntSet<Tag>,
+        layout_features: &IntSet<Tag>,
         name_ids: &IntSet<NameId>,
         name_languages: &IntSet<u16>,
     ) -> Self {
         let mut this = Plan {
+            glyphs_requested: input_gids.clone(),
             font_num_glyphs: get_font_num_glyphs(font),
             subset_flags: flags,
             drop_tables: drop_tables.clone(),
+            layout_scripts: layout_scripts.clone(),
+            layout_features: layout_features.clone(),
             name_ids: name_ids.clone(),
             name_languages: name_languages.clone(),
             ..Default::default()
         };
 
+        // ref: <https://github.com/harfbuzz/harfbuzz/blob/b5a65e0f20c30a7f13b2f6619479a6d666e603e0/src/hb-subset-input.cc#L71>
+        let default_no_subset_tables = [gasp::Gasp::TAG, FPGM, PREP, VDMX, DSIG];
+        this.no_subset_tables
+            .extend(default_no_subset_tables.iter().copied());
+
         this.populate_unicodes_to_retain(input_gids, input_unicodes, font);
         this.populate_gids_to_retain(font);
         this.create_old_gid_to_new_gid_map();
 
+        this.collect_base_var_indices(font);
         this
     }
 
@@ -271,6 +417,41 @@ impl Plan {
             .extend(self.unicode_to_new_gid_list.iter().map(|t| t.1));
         self.unicodes
             .extend(self.unicode_to_new_gid_list.iter().map(|t| t.0));
+
+        // ref: <https://github.com/harfbuzz/harfbuzz/blob/e451e91ec3608a2ebfec34d0c4f0b3d880e00e33/src/hb-subset-plan.cc#L802>
+        self.os2_info.min_cmap_codepoint = self.unicodes.first().unwrap_or(0xFFFF_u32);
+        self.os2_info.max_cmap_codepoint = self.unicodes.last().unwrap_or(0xFFFF_u32);
+
+        self.collect_variation_selectors(font, input_unicodes);
+    }
+
+    fn collect_variation_selectors(&mut self, font: &FontRef, input_unicodes: &IntSet<u32>) {
+        if let Ok(cmap) = font.cmap() {
+            let encoding_records = cmap.encoding_records();
+            if let Ok(i) = encoding_records.binary_search_by(|r| {
+                if r.platform_id() != PlatformId::Unicode {
+                    r.platform_id().cmp(&PlatformId::Unicode)
+                } else if r.encoding_id() != 5 {
+                    r.encoding_id().cmp(&5)
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            }) {
+                if let Ok(CmapSubtable::Format14(cmap14)) = encoding_records
+                    .get(i)
+                    .unwrap()
+                    .subtable(cmap.offset_data())
+                {
+                    self.unicodes.extend(
+                        cmap14
+                            .var_selector()
+                            .iter()
+                            .map(|s| s.var_selector().to_u32())
+                            .filter(|v| input_unicodes.contains(*v)),
+                    );
+                }
+            }
+        }
     }
 
     fn populate_gids_to_retain(&mut self, font: &FontRef) {
@@ -293,21 +474,24 @@ impl Plan {
         }
 
         /* Populate a full set of glyphs to retain by adding all referenced composite glyphs. */
-        let loca = font.loca(None).expect("Error reading loca table");
-        let glyf = font.glyf().expect("Error reading glyf table");
-        let operation_count =
-            self.glyphset_gsub.len() * (MAX_COMPOSITE_OPERATIONS_PER_GLYPH as u64);
-        for gid in self.glyphset_colred.iter() {
-            glyf_closure_glyphs(
-                &loca,
-                &glyf,
-                gid,
-                &mut self.glyphset,
-                operation_count as i32,
-                0,
-            );
+        if let Ok(loca) = font.loca(None) {
+            let glyf = font.glyf().expect("Error reading glyf table");
+            let operation_count =
+                self.glyphset_gsub.len() * (MAX_COMPOSITE_OPERATIONS_PER_GLYPH as u64);
+            for gid in self.glyphset_colred.iter() {
+                glyf_closure_glyphs(
+                    &loca,
+                    &glyf,
+                    gid,
+                    &mut self.glyphset,
+                    operation_count as i32,
+                    0,
+                );
+            }
+            remove_invalid_gids(&mut self.glyphset, self.font_num_glyphs);
+        } else {
+            self.glyphset = self.glyphset_colred.clone();
         }
-        remove_invalid_gids(&mut self.glyphset, self.font_num_glyphs);
 
         self.nameid_closure(font);
     }
@@ -315,6 +499,7 @@ impl Plan {
     fn create_old_gid_to_new_gid_map(&mut self) {
         let pop = self.glyphset.len();
         self.glyph_map.reserve(pop as usize);
+        self.reverse_glyph_map.reserve(pop as usize);
         self.new_to_old_gid_list.reserve(pop as usize);
 
         //TODO: Add support for requested_glyph_map, command line option --gid-map
@@ -339,6 +524,8 @@ impl Plan {
         }
         self.glyph_map
             .extend(self.new_to_old_gid_list.iter().map(|x| (x.1, x.0)));
+        self.reverse_glyph_map
+            .extend(self.new_to_old_gid_list.iter().map(|x| (x.0, x.1)));
     }
 
     fn colr_closure(&mut self, font: &FontRef) {
@@ -396,6 +583,89 @@ impl Plan {
             }
         }
     }
+
+    fn collect_base_var_indices(&mut self, font: &FontRef) {
+        if self.drop_tables.contains(Tag::new(b"BASE")) {
+            return;
+        }
+
+        if font.fvar().is_err() {
+            return;
+        }
+        let Ok(base) = font.base() else {
+            return;
+        };
+
+        let Some(Ok(var_store)) = base.item_var_store() else {
+            return;
+        };
+
+        let mut varidx_set = IntSet::empty();
+        {
+            base.collect_variation_indices(self, &mut varidx_set);
+        }
+
+        let vardata_count = var_store.item_variation_data_count() as u32;
+        remap_variation_indices(vardata_count, &varidx_set, &mut self.base_varidx_delta_map);
+        generate_varstore_inner_maps(
+            &varidx_set,
+            vardata_count,
+            &mut self.base_varstore_inner_maps,
+        );
+    }
+}
+
+// TODO: when instancing, calculate delta value and set new varidx to NO_VARIATIONS_IDX if all axes are pinned
+fn remap_variation_indices(
+    vardata_count: u32,
+    varidx_set: &IntSet<u32>,
+    varidx_delta_map: &mut FnvHashMap<u32, (u32, i32)>,
+) {
+    if vardata_count == 0 || varidx_set.is_empty() {
+        return;
+    }
+
+    let mut new_major: u32 = 0;
+    let mut new_minor: u32 = 0;
+    let mut last_major = varidx_set.first().unwrap() >> 16;
+    for var_idx in varidx_set.iter() {
+        let major = var_idx >> 16;
+        if major >= vardata_count {
+            break;
+        }
+
+        if major != last_major {
+            new_minor = 0;
+            new_major += 1;
+        }
+
+        let new_idx = (new_major << 16) + new_minor;
+        varidx_delta_map.insert(var_idx, (new_idx, 0));
+
+        new_minor += 1;
+        last_major = major;
+    }
+}
+
+fn generate_varstore_inner_maps(
+    varidx_set: &IntSet<u32>,
+    vardata_count: u32,
+    inner_maps: &mut Vec<IncBiMap>,
+) {
+    if varidx_set.is_empty() || vardata_count == 0 {
+        return;
+    }
+
+    inner_maps.resize_with(vardata_count as usize, Default::default);
+    for idx in varidx_set.iter() {
+        let major = idx >> 16;
+        let minor = idx & 0xFFFF;
+        if major >= vardata_count {
+            break;
+        }
+
+        inner_maps[major as usize].add(minor);
+    }
 }
 
 /// glyph closure for Composite glyphs in glyf table
@@ -443,9 +713,7 @@ fn remove_invalid_gids(gids: &mut IntSet<GlyphId>, num_glyphs: usize) {
 }
 
 fn get_font_num_glyphs(font: &FontRef) -> usize {
-    let loca = font.loca(None).expect("Error reading loca table");
-    let ret = loca.len();
-
+    let ret = font.loca(None).map(|loca| loca.len()).unwrap_or_default();
     let maxp = font.maxp().expect("Error reading maxp table");
     ret.max(maxp.num_glyphs() as usize)
 }
@@ -503,15 +771,49 @@ pub trait NameIdClosure {
     fn collect_name_ids(&self, plan: &mut Plan);
 }
 
-// This trait is implemented for all font tables
+pub(crate) trait CollectVaritionaIndices {
+    fn collect_variation_indices(&self, plan: &Plan, varidx_set: &mut IntSet<u32>);
+}
+
+pub const CVT: Tag = Tag::new(b"cvt ");
+pub const DSIG: Tag = Tag::new(b"DSIG");
+pub const EBSC: Tag = Tag::new(b"EBSC");
+pub const FPGM: Tag = Tag::new(b"fpgm");
+pub const GLAT: Tag = Tag::new(b"Glat");
+pub const GLOC: Tag = Tag::new(b"Gloc");
+pub const JSTF: Tag = Tag::new(b"JSTF");
+pub const LTSH: Tag = Tag::new(b"LTSH");
+pub const MORX: Tag = Tag::new(b"morx");
+pub const MORT: Tag = Tag::new(b"mort");
+pub const KERX: Tag = Tag::new(b"kerx");
+pub const KERN: Tag = Tag::new(b"kern");
+pub const PCLT: Tag = Tag::new(b"PCLT");
+pub const PREP: Tag = Tag::new(b"prep");
+pub const SILF: Tag = Tag::new(b"Silf");
+pub const SILL: Tag = Tag::new(b"Sill");
+pub const VDMX: Tag = Tag::new(b"VDMX");
+// This trait is implemented for all font top-level tables
 pub trait Subset {
     /// Subset this table, if successful a subset version of this table will be added to builder
     fn subset(
         &self,
         plan: &Plan,
         font: &FontRef,
+        s: &mut Serializer,
         builder: &mut FontBuilder,
     ) -> Result<(), SubsetError>;
+}
+
+// A helper trait providing a 'subset' method for various subtables that have no associated tag
+pub(crate) trait SubsetTable<'a> {
+    type ArgsForSubset: 'a;
+    /// Subset this table and write a subset version of this table into serializer
+    fn subset(
+        &self,
+        plan: &Plan,
+        s: &mut Serializer,
+        args: &Self::ArgsForSubset,
+    ) -> Result<(), SerializeErrorFlags>;
 }
 
 pub fn subset_font(font: &FontRef, plan: &Plan) -> Result<Vec<u8>, SubsetError> {
@@ -519,12 +821,82 @@ pub fn subset_font(font: &FontRef, plan: &Plan) -> Result<Vec<u8>, SubsetError> 
 
     for record in font.table_directory.table_records() {
         let tag = record.tag();
-        if plan.drop_tables.contains(tag) {
+        if should_drop_table(tag, plan) {
             continue;
         }
-        subset_table(tag, font, plan, &mut builder)?;
+        subset(tag, font, plan, &mut builder, record.length())?;
     }
     Ok(builder.build())
+}
+
+fn should_drop_table(tag: Tag, plan: &Plan) -> bool {
+    if plan.drop_tables.contains(tag) {
+        return true;
+    }
+
+    let no_hinting = plan
+        .subset_flags
+        .contains(SubsetFlags::SUBSET_FLAGS_NO_HINTING);
+
+    match tag {
+        // hint tables
+        Cvar::TAG | CVT | FPGM | PREP | Hdmx::TAG | VDMX => no_hinting,
+        //TODO: drop var tables during instancing when all axes are pinned
+        _ => false,
+    }
+}
+
+fn subset<'a>(
+    table_tag: Tag,
+    font: &FontRef<'a>,
+    plan: &Plan,
+    builder: &mut FontBuilder<'a>,
+    table_len: u32,
+) -> Result<(), SubsetError> {
+    let buf_size = estimate_subset_table_size(font, table_tag, plan);
+    let mut s = Serializer::new(buf_size);
+    let needed = try_subset(table_tag, font, plan, builder, &mut s, table_len);
+    if s.in_error() && !s.only_offset_overflow() {
+        return Err(SubsetError::SubsetTableError(table_tag));
+    }
+
+    // table subsetted to empty
+    if needed.is_err() {
+        return Ok(());
+    }
+
+    //TODO: repack when there's an offset overflow
+    let subsetted_data = s.copy_bytes();
+    if !subsetted_data.is_empty() {
+        builder.add_raw(table_tag, subsetted_data);
+    }
+    Ok(())
+}
+
+fn try_subset<'a>(
+    table_tag: Tag,
+    font: &FontRef<'a>,
+    plan: &Plan,
+    builder: &mut FontBuilder<'a>,
+    s: &mut Serializer,
+    table_len: u32,
+) -> Result<(), SubsetError> {
+    s.start_serialize()
+        .map_err(|_| SubsetError::SubsetTableError(table_tag))?;
+
+    let ret = subset_table(table_tag, font, plan, builder, s);
+    if !s.ran_out_of_room() {
+        s.end_serialize();
+        return ret;
+    }
+
+    // ran out of room, reallocate more bytes
+    let buf_size = s.allocated() * 2 + 16;
+    if buf_size > (table_len as usize) * 256 {
+        return ret;
+    }
+    s.reset_size(buf_size);
+    try_subset(table_tag, font, plan, builder, s, table_len)
 }
 
 fn subset_table<'a>(
@@ -532,61 +904,96 @@ fn subset_table<'a>(
     font: &FontRef<'a>,
     plan: &Plan,
     builder: &mut FontBuilder<'a>,
+    s: &mut Serializer,
 ) -> Result<(), SubsetError> {
+    if plan.no_subset_tables.contains(tag) {
+        return passthrough_table(tag, font, s);
+    }
+
     match tag {
+        Base::TAG => font
+            .base()
+            .map_err(|_| SubsetError::SubsetTableError(Base::TAG))?
+            .subset(plan, font, s, builder),
+
+        Cmap::TAG => font
+            .cmap()
+            .map_err(|_| SubsetError::SubsetTableError(Cmap::TAG))?
+            .subset(plan, font, s, builder),
+
         Glyf::TAG => font
             .glyf()
             .map_err(|_| SubsetError::SubsetTableError(Glyf::TAG))?
-            .subset(plan, font, builder),
+            .subset(plan, font, s, builder),
 
         Gvar::TAG => font
             .gvar()
             .map_err(|_| SubsetError::SubsetTableError(Gvar::TAG))?
-            .subset(plan, font, builder),
+            .subset(plan, font, s, builder),
+
+        Hdmx::TAG => font
+            .hdmx()
+            .map_err(|_| SubsetError::SubsetTableError(Hdmx::TAG))?
+            .subset(plan, font, s, builder),
+
         //handled by glyf table if exists
         Head::TAG => font.glyf().map(|_| ()).or_else(|_| {
             font.head()
                 .map_err(|_| SubsetError::SubsetTableError(Head::TAG))?
-                .subset(plan, font, builder)
+                .subset(plan, font, s, builder)
         }),
+
         //Skip, handled by Hmtx
         Hhea::TAG => Ok(()),
 
         Hmtx::TAG => font
             .hmtx()
             .map_err(|_| SubsetError::SubsetTableError(Hmtx::TAG))?
-            .subset(plan, font, builder),
+            .subset(plan, font, s, builder),
+
         //Skip, handled by glyf
         Loca::TAG => Ok(()),
 
         Maxp::TAG => font
             .maxp()
             .map_err(|_| SubsetError::SubsetTableError(Maxp::TAG))?
-            .subset(plan, font, builder),
+            .subset(plan, font, s, builder),
 
         Name::TAG => font
             .name()
             .map_err(|_| SubsetError::SubsetTableError(Name::TAG))?
-            .subset(plan, font, builder),
+            .subset(plan, font, s, builder),
 
         Os2::TAG => font
             .os2()
             .map_err(|_| SubsetError::SubsetTableError(Os2::TAG))?
-            .subset(plan, font, builder),
+            .subset(plan, font, s, builder),
 
         Post::TAG => font
             .post()
             .map_err(|_| SubsetError::SubsetTableError(Post::TAG))?
-            .subset(plan, font, builder),
-        _ => {
-            if let Some(data) = font.data_for_tag(tag) {
-                builder.add_raw(tag, data);
-                Ok(())
-            } else {
-                Err(SubsetError::SubsetTableError(tag))
-            }
-        }
+            .subset(plan, font, s, builder),
+
+        Sbix::TAG => font
+            .sbix()
+            .map_err(|_| SubsetError::SubsetTableError(Sbix::TAG))?
+            .subset(plan, font, s, builder),
+
+        Vorg::TAG => font
+            .vorg()
+            .map_err(|_| SubsetError::SubsetTableError(Vorg::TAG))?
+            .subset(plan, font, s, builder),
+
+        _ => passthrough_table(tag, font, s),
     }
+}
+
+fn passthrough_table(tag: Tag, font: &FontRef<'_>, s: &mut Serializer) -> Result<(), SubsetError> {
+    if let Some(data) = font.data_for_tag(tag) {
+        s.embed_bytes(data.as_bytes())
+            .map_err(|_| SubsetError::SubsetTableError(tag))?;
+    }
+    Ok(())
 }
 
 pub fn estimate_subset_table_size(font: &FontRef, table_tag: Tag, plan: &Plan) -> usize {

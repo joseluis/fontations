@@ -74,6 +74,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::Base<'a>> for Base {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::Base<'a>> for Base {}
 
 impl<'a> FontRead<'a> for Base {
@@ -135,6 +136,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::Axis<'a>> for Axis {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::Axis<'a>> for Axis {}
 
 impl<'a> FontRead<'a> for Axis {
@@ -164,7 +166,7 @@ impl BaseTagList {
 impl FontWrite for BaseTagList {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.baseline_tags).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.baseline_tags)).unwrap()).write_into(writer);
         self.baseline_tags.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -193,6 +195,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::BaseTagList<'a>> for BaseTagList {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::BaseTagList<'a>> for BaseTagList {}
 
 impl<'a> FontRead<'a> for BaseTagList {
@@ -222,7 +225,7 @@ impl BaseScriptList {
 impl FontWrite for BaseScriptList {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
-        (array_len(&self.base_script_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.base_script_records)).unwrap()).write_into(writer);
         self.base_script_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -252,6 +255,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::BaseScriptList<'a>> for BaseScript
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::BaseScriptList<'a>> for BaseScriptList {}
 
 impl<'a> FontRead<'a> for BaseScriptList {
@@ -346,7 +350,7 @@ impl FontWrite for BaseScript {
     fn write_into(&self, writer: &mut TableWriter) {
         self.base_values.write_into(writer);
         self.default_min_max.write_into(writer);
-        (array_len(&self.base_lang_sys_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.base_lang_sys_records)).unwrap()).write_into(writer);
         self.base_lang_sys_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -384,6 +388,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::BaseScript<'a>> for BaseScript {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::BaseScript<'a>> for BaseScript {}
 
 impl<'a> FontRead<'a> for BaseScript {
@@ -472,7 +477,7 @@ impl FontWrite for BaseValues {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         self.default_baseline_index.write_into(writer);
-        (array_len(&self.base_coords).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.base_coords)).unwrap()).write_into(writer);
         self.base_coords.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -502,6 +507,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::BaseValues<'a>> for BaseValues {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::BaseValues<'a>> for BaseValues {}
 
 impl<'a> FontRead<'a> for BaseValues {
@@ -545,7 +551,7 @@ impl FontWrite for MinMax {
     fn write_into(&self, writer: &mut TableWriter) {
         self.min_coord.write_into(writer);
         self.max_coord.write_into(writer);
-        (array_len(&self.feat_min_max_records).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.feat_min_max_records)).unwrap()).write_into(writer);
         self.feat_min_max_records.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -583,6 +589,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::MinMax<'a>> for MinMax {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::MinMax<'a>> for MinMax {}
 
 impl<'a> FontRead<'a> for MinMax {
@@ -795,6 +802,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::BaseCoordFormat1<'a>> for BaseCoor
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::BaseCoordFormat1<'a>> for BaseCoordFormat1 {}
 
 impl<'a> FontRead<'a> for BaseCoordFormat1 {
@@ -854,6 +862,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::BaseCoordFormat2<'a>> for BaseCoor
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::BaseCoordFormat2<'a>> for BaseCoordFormat2 {}
 
 impl<'a> FontRead<'a> for BaseCoordFormat2 {
@@ -916,6 +925,7 @@ impl<'a> FromObjRef<read_fonts::tables::base::BaseCoordFormat3<'a>> for BaseCoor
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::base::BaseCoordFormat3<'a>> for BaseCoordFormat3 {}
 
 impl<'a> FontRead<'a> for BaseCoordFormat3 {

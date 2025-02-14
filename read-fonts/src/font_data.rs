@@ -202,12 +202,12 @@ impl<'a> Cursor<'a> {
         #[allow(clippy::arithmetic_side_effects)] // these are all checked
         let result = match b0 {
             _ if b0 < 0x80 => b0,
-            _ if b0 < 0xC0 => (b0 - 0x80) << 8 | next()?,
-            _ if b0 < 0xE0 => (b0 - 0xC0) << 16 | next()? << 8 | next()?,
-            _ if b0 < 0xF0 => (b0 - 0xE0) << 24 | next()? << 16 | next()? << 8 | next()?,
+            _ if b0 < 0xC0 => ((b0 - 0x80) << 8) | next()?,
+            _ if b0 < 0xE0 => ((b0 - 0xC0) << 16) | (next()? << 8) | next()?,
+            _ if b0 < 0xF0 => ((b0 - 0xE0) << 24) | (next()? << 16) | (next()? << 8) | next()?,
             _ => {
                 // TODO: << 32 doesn't make sense. (b0 - 0xF0) << 32
-                next()? << 24 | next()? << 16 | next()? << 8 | next()?
+                (next()? << 24) | (next()? << 16) | (next()? << 8) | next()?
             }
         };
 
@@ -269,30 +269,6 @@ impl<'a> Cursor<'a> {
         self.advance_by(len);
         temp
     }
-
-    /// read a value, validating it with the provided function if successful.
-    //pub(crate) fn read_validate<T, F>(&mut self, f: F) -> Result<T, ReadError>
-    //where
-    //T: ReadScalar,
-    //F: FnOnce(&T) -> bool,
-    //{
-    //let temp = self.read()?;
-    //if f(&temp) {
-    //Ok(temp)
-    //} else {
-    //Err(ReadError::ValidationError)
-    //}
-    //}
-
-    //pub(crate) fn check_array<T: Scalar>(&mut self, len_bytes: usize) -> Result<(), ReadError> {
-    //assert_ne!(std::mem::size_of::<BigEndian<T>>(), 0);
-    //assert_eq!(std::mem::align_of::<BigEndian<T>>(), 1);
-    //if len_bytes % T::SIZE != 0 {
-    //return Err(ReadError::InvalidArrayLen);
-    //}
-    //self.data.check_in_bounds(self.pos + len_bytes)
-    //todo!()
-    //}
 
     /// return the current position, or an error if we are out of bounds
     pub(crate) fn position(&self) -> Result<usize, ReadError> {

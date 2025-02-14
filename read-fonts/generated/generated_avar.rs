@@ -15,29 +15,40 @@ pub struct AvarMarker {
 }
 
 impl AvarMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn _reserved_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_count_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_count_byte_range(&self) -> Range<usize> {
         let start = self._reserved_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn axis_segment_maps_byte_range(&self) -> Range<usize> {
+
+    pub fn axis_segment_maps_byte_range(&self) -> Range<usize> {
         let start = self.axis_count_byte_range().end;
         start..start + self.axis_segment_maps_byte_len
     }
-    fn axis_index_map_offset_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn axis_index_map_offset_byte_range(&self) -> Option<Range<usize>> {
         let start = self.axis_index_map_offset_byte_start?;
         Some(start..start + Offset32::RAW_BYTE_LEN)
     }
-    fn var_store_offset_byte_range(&self) -> Option<Range<usize>> {
+
+    pub fn var_store_offset_byte_range(&self) -> Option<Range<usize>> {
         let start = self.var_store_offset_byte_start?;
         Some(start..start + Offset32::RAW_BYTE_LEN)
+    }
+}
+
+impl MinByteRange for AvarMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.axis_segment_maps_byte_range().end
     }
 }
 
@@ -82,6 +93,7 @@ impl<'a> FontRead<'a> for Avar<'a> {
 /// The [avar (Axis Variations)](https://docs.microsoft.com/en-us/typography/opentype/spec/avar) table
 pub type Avar<'a> = TableRef<'a, AvarMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Avar<'a> {
     /// Major version number of the axis variations table — set to 1 or 2.
     /// Minor version number of the axis variations table — set to 0.
@@ -159,6 +171,7 @@ impl<'a> SomeTable<'a> for Avar<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Avar<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

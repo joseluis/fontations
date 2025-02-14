@@ -13,25 +13,35 @@ pub struct FeatMarker {
 }
 
 impl FeatMarker {
-    fn version_byte_range(&self) -> Range<usize> {
+    pub fn version_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + MajorMinor::RAW_BYTE_LEN
     }
-    fn feature_name_count_byte_range(&self) -> Range<usize> {
+
+    pub fn feature_name_count_byte_range(&self) -> Range<usize> {
         let start = self.version_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn _reserved1_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved1_byte_range(&self) -> Range<usize> {
         let start = self.feature_name_count_byte_range().end;
         start..start + u16::RAW_BYTE_LEN
     }
-    fn _reserved2_byte_range(&self) -> Range<usize> {
+
+    pub fn _reserved2_byte_range(&self) -> Range<usize> {
         let start = self._reserved1_byte_range().end;
         start..start + u32::RAW_BYTE_LEN
     }
-    fn names_byte_range(&self) -> Range<usize> {
+
+    pub fn names_byte_range(&self) -> Range<usize> {
         let start = self._reserved2_byte_range().end;
         start..start + self.names_byte_len
+    }
+}
+
+impl MinByteRange for FeatMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.names_byte_range().end
     }
 }
 
@@ -58,6 +68,7 @@ impl<'a> FontRead<'a> for Feat<'a> {
 /// The [feature name](https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6feat.html) table.
 pub type Feat<'a> = TableRef<'a, FeatMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> Feat<'a> {
     /// Version number of the feature name table (0x00010000 for the current
     /// version).
@@ -102,6 +113,7 @@ impl<'a> SomeTable<'a> for Feat<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for Feat<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)
@@ -203,9 +215,15 @@ pub struct SettingNameArrayMarker {
 }
 
 impl SettingNameArrayMarker {
-    fn settings_byte_range(&self) -> Range<usize> {
+    pub fn settings_byte_range(&self) -> Range<usize> {
         let start = 0;
         start..start + self.settings_byte_len
+    }
+}
+
+impl MinByteRange for SettingNameArrayMarker {
+    fn min_byte_range(&self) -> Range<usize> {
+        0..self.settings_byte_range().end
     }
 }
 
@@ -238,6 +256,7 @@ impl<'a> SettingNameArray<'a> {
 
 pub type SettingNameArray<'a> = TableRef<'a, SettingNameArrayMarker>;
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> SettingNameArray<'a> {
     /// List of setting names for a feature.
     pub fn settings(&self) -> &'a [SettingName] {
@@ -267,6 +286,7 @@ impl<'a> SomeTable<'a> for SettingNameArray<'a> {
 }
 
 #[cfg(feature = "experimental_traverse")]
+#[allow(clippy::needless_lifetimes)]
 impl<'a> std::fmt::Debug for SettingNameArray<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self as &dyn SomeTable<'a>).fmt(f)

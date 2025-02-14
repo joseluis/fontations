@@ -59,7 +59,7 @@ pub struct Decoration {
 ///   `x_height`, `strikeout`, as well as the line metrics: `ascent`, `descent`, `leading` if the `USE_TYPOGRAPHIC_METRICS`
 ///   flag is set or the `hhea` line metrics are zero (the Windows metrics are used as a last resort).
 /// * [hhea](https://learn.microsoft.com/en-us/typography/opentype/spec/hhea): `max_width`, as well as the line metrics:
-///   `ascent`, `descent`, `leading` if they are non-zero and the `USE_TYPOGRAHIC_METRICS` flag is not set in the OS/2 table
+///   `ascent`, `descent`, `leading` if they are non-zero and the `USE_TYPOGRAPHIC_METRICS` flag is not set in the OS/2 table
 ///
 /// For variable fonts, deltas are computed using the  [MVAR](https://learn.microsoft.com/en-us/typography/opentype/spec/MVAR)
 /// table.
@@ -366,16 +366,17 @@ impl<'a> GlyphMetrics<'a> {
     }
 }
 
-impl<'a> GlyphMetrics<'a> {
+impl GlyphMetrics<'_> {
     fn metric_deltas_from_gvar(&self, glyph_id: GlyphId) -> Option<[i32; 2]> {
         let (loca, glyf) = self.loca_glyf.as_ref()?;
         let mut deltas = self
             .gvar
             .as_ref()?
             .phantom_point_deltas(glyf, loca, self.coords, glyph_id)
-            .ok()?;
+            .ok()
+            .flatten()?;
         deltas[1] -= deltas[0];
-        Some([deltas[0], deltas[1]].map(|delta| delta.to_i32()))
+        Some([deltas[0], deltas[1]].map(|delta| delta.x.to_i32()))
     }
 }
 

@@ -6,10 +6,10 @@ include!("../../generated/generated_base.rs");
 
 #[cfg(test)]
 mod tests {
+    use font_test_data::bebuffer::BeBuffer;
     use font_types::MajorMinor;
 
     use super::*;
-    use crate::test_helpers::BeBuffer;
 
     #[test]
     /// https://learn.microsoft.com/en-us/typography/opentype/spec/base#base-table-examples
@@ -37,7 +37,7 @@ mod tests {
             .push(Tag::new(b"latn"))
             .push(0xb4_u16);
 
-        let base = Base::read(data.font_data()).unwrap();
+        let base = Base::read(data.data().into()).unwrap();
         assert_eq!(base.version(), MajorMinor::VERSION_1_0);
         let horiz = base.horiz_axis().unwrap().unwrap();
         let base_tag = horiz.base_tag_list().unwrap().unwrap();
@@ -45,6 +45,7 @@ mod tests {
             base_tag.baseline_tags(),
             &[Tag::new(b"hang"), Tag::new(b"ideo"), Tag::new(b"romn")]
         );
+        assert_eq!(base_tag.min_byte_range().end, 14);
         let base_script = horiz.base_script_list().unwrap();
         assert_eq!(
             base_script.base_script_records()[3].base_script_tag(),

@@ -33,9 +33,9 @@ impl FontWrite for Stat {
         let version = MajorMinor::VERSION_1_2 as MajorMinor;
         version.write_into(writer);
         (8 as u16).write_into(writer);
-        (array_len(&self.design_axes).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.design_axes)).unwrap()).write_into(writer);
         self.design_axes.write_into(writer);
-        (array_len(&self.offset_to_axis_values).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.offset_to_axis_values)).unwrap()).write_into(writer);
         self.offset_to_axis_values.write_into(writer);
         version.compatible((1u16, 1u16)).then(|| {
             self.elided_fallback_name_id
@@ -83,6 +83,7 @@ impl<'a> FromObjRef<read_fonts::tables::stat::Stat<'a>> for Stat {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::stat::Stat<'a>> for Stat {}
 
 impl<'a> FontRead<'a> for Stat {
@@ -190,6 +191,7 @@ impl<'a> FromObjRef<read_fonts::tables::stat::AxisValueArray<'a>> for AxisValueA
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::stat::AxisValueArray<'a>> for AxisValueArray {}
 
 /// [Axis Value Tables](https://docs.microsoft.com/en-us/typography/opentype/spec/stat#axis-value-tables)
@@ -407,6 +409,7 @@ impl<'a> FromObjRef<read_fonts::tables::stat::AxisValueFormat1<'a>> for AxisValu
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::stat::AxisValueFormat1<'a>> for AxisValueFormat1 {}
 
 impl<'a> FontRead<'a> for AxisValueFormat1 {
@@ -493,6 +496,7 @@ impl<'a> FromObjRef<read_fonts::tables::stat::AxisValueFormat2<'a>> for AxisValu
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::stat::AxisValueFormat2<'a>> for AxisValueFormat2 {}
 
 impl<'a> FontRead<'a> for AxisValueFormat2 {
@@ -571,6 +575,7 @@ impl<'a> FromObjRef<read_fonts::tables::stat::AxisValueFormat3<'a>> for AxisValu
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::stat::AxisValueFormat3<'a>> for AxisValueFormat3 {}
 
 impl<'a> FontRead<'a> for AxisValueFormat3 {
@@ -613,7 +618,7 @@ impl FontWrite for AxisValueFormat4 {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         (4 as u16).write_into(writer);
-        (array_len(&self.axis_values).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.axis_values)).unwrap()).write_into(writer);
         self.flags.write_into(writer);
         self.value_name_id.write_into(writer);
         self.axis_values.write_into(writer);
@@ -647,6 +652,7 @@ impl<'a> FromObjRef<read_fonts::tables::stat::AxisValueFormat4<'a>> for AxisValu
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::tables::stat::AxisValueFormat4<'a>> for AxisValueFormat4 {}
 
 impl<'a> FontRead<'a> for AxisValueFormat4 {

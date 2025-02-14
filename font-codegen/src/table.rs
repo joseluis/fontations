@@ -22,6 +22,7 @@ pub(crate) fn generate(item: &Table) -> syn::Result<TokenStream> {
     let marker_name = item.marker_name();
     let raw_name = item.raw_name();
     let shape_byte_range_fns = item.iter_shape_byte_fns();
+    let optional_min_byte_range_trait_impl = item.impl_min_byte_range_trait();
     let shape_fields = item.iter_shape_fields();
     let derive_clone_copy = generic.is_none().then(|| quote!(Clone, Copy));
     let impl_clone_copy = generic.is_some().then(|| {
@@ -116,6 +117,8 @@ pub(crate) fn generate(item: &Table) -> syn::Result<TokenStream> {
             #( #shape_byte_range_fns )*
         }
 
+        #optional_min_byte_range_trait_impl
+
         #top_level
 
         #impl_clone_copy
@@ -127,6 +130,7 @@ pub(crate) fn generate(item: &Table) -> syn::Result<TokenStream> {
         #( #docs )*
         pub type #raw_name<'a, #generic> = TableRef<'a, #marker_name<#generic>>;
 
+        #[allow(clippy::needless_lifetimes)]
         impl<'a, #generic> #raw_name<'a, #generic> {
 
             #( #table_ref_getters )*
@@ -278,7 +282,7 @@ pub(crate) fn generate_group(item: &GenericGroup) -> syn::Result<TokenStream> {
         }
 
         #[cfg(feature = "experimental_traverse")]
-        impl<'a> std::fmt::Debug for #name<'a> {
+        impl std::fmt::Debug for #name<'_> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.dyn_inner().fmt(f)
             }
@@ -329,6 +333,7 @@ fn generate_debug(item: &Table) -> syn::Result<TokenStream> {
         }
 
         #[cfg(feature = "experimental_traverse")]
+        #[allow(clippy::needless_lifetimes)]
         impl<'a, #generic #generic_bounds> std::fmt::Debug for #name<'a, #generic> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 (self as &dyn SomeTable<'a>).fmt(f)
@@ -416,6 +421,7 @@ fn generate_to_owned_impl(item: &Table, parse_module: &syn::Path) -> syn::Result
             }
         }
 
+        #[allow(clippy::needless_lifetimes)]
         impl<'a, #(#impl_generics2,)* > FromTableRef<#parse_module :: #name<'a, #parse_generic >> for #name<#comp_generic> #where_clause {}
 
         #maybe_font_read
@@ -717,7 +723,7 @@ fn generate_format_getter_for_shared_field(item: &TableFormat, field: &Field) ->
     let method_name = &field.name;
     let return_type = field.table_getter_return_type();
     let arms = item.variants.iter().map(|variant| {
-        let var_name = &variant.name;
+        let var_name: &syn::Ident = &variant.name;
         quote!(Self::#var_name(item) => item.#method_name(), )
     });
 
@@ -833,6 +839,15 @@ pub(crate) fn generate_format_group(item: &TableFormat, items: &Items) -> syn::R
         }
     });
 
+    let min_byte_arms = item
+        .variants
+        .iter()
+        .filter(|variant| variant.attrs.write_only.is_none())
+        .map(|variant| {
+            let var_name: &syn::Ident = &variant.name;
+            quote!(Self::#var_name(item) => item.min_byte_range(), )
+        });
+
     Ok(quote! {
         #( #docs )*
         #[derive(Clone)]
@@ -853,6 +868,14 @@ pub(crate) fn generate_format_group(item: &TableFormat, items: &Items) -> syn::R
             }
         }
 
+        impl MinByteRange for #name<'_> {
+            fn min_byte_range(&self) -> Range<usize> {
+                match self {
+                    #( #min_byte_arms )*
+                }
+            }
+        }
+
         #[cfg(feature = "experimental_traverse")]
         impl<'a> #name<'a> {
             fn dyn_inner<'b>(&'b self) -> &'b dyn SomeTable<'a> {
@@ -863,7 +886,7 @@ pub(crate) fn generate_format_group(item: &TableFormat, items: &Items) -> syn::R
         }
 
         #[cfg(feature = "experimental_traverse")]
-        impl<'a> std::fmt::Debug for #name<'a> {
+        impl std::fmt::Debug for #name<'_> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.dyn_inner().fmt(f)
             }
@@ -908,7 +931,7 @@ impl Table {
                 };
                 let start_field_name = field.shape_byte_start_field_name();
                 return Some(quote! {
-                    fn #fn_name(&self) -> Option<Range<usize>> {
+                    pub fn #fn_name(&self) -> Option<Range<usize>> {
                         let start = self.#start_field_name?;
                         Some(start..start + #len_expr)
                     }
@@ -916,7 +939,7 @@ impl Table {
             }
 
             let result = quote! {
-                fn #fn_name(&self) -> Range<usize> {
+                pub fn #fn_name(&self) -> Range<usize> {
                     let start = #prev_field_end_expr;
                     start..start + #len_expr
                 }
@@ -1001,6 +1024,24 @@ impl Table {
         Some(quote! {
             impl Format<#typ> for #name {
                 const FORMAT: #typ = #value;
+            }
+        })
+    }
+
+    pub(crate) fn impl_min_byte_range_trait(&self) -> Option<TokenStream> {
+        let field = self
+            .fields
+            .iter()
+            .filter(|fld| fld.attrs.conditional.is_none())
+            .last()?;
+        let name = self.marker_name();
+
+        let fn_name = field.shape_byte_range_fn_name();
+        Some(quote! {
+            impl MinByteRange for #name {
+                fn min_byte_range(&self) -> Range<usize> {
+                    0..self.#fn_name().end
+                }
             }
         })
     }

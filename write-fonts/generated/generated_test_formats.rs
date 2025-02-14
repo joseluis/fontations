@@ -44,6 +44,7 @@ impl<'a> FromObjRef<read_fonts::codegen_test::formats::Table1<'a>> for Table1 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::codegen_test::formats::Table1<'a>> for Table1 {}
 
 impl<'a> FontRead<'a> for Table1 {
@@ -72,7 +73,7 @@ impl FontWrite for Table2 {
     #[allow(clippy::unnecessary_cast)]
     fn write_into(&self, writer: &mut TableWriter) {
         (2 as u16).write_into(writer);
-        (array_len(&self.values).unwrap() as u16).write_into(writer);
+        (u16::try_from(array_len(&self.values)).unwrap()).write_into(writer);
         self.values.write_into(writer);
     }
     fn table_type(&self) -> TableType {
@@ -101,6 +102,7 @@ impl<'a> FromObjRef<read_fonts::codegen_test::formats::Table2<'a>> for Table2 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::codegen_test::formats::Table2<'a>> for Table2 {}
 
 impl<'a> FontRead<'a> for Table2 {
@@ -139,6 +141,7 @@ impl<'a> FromObjRef<read_fonts::codegen_test::formats::Table3<'a>> for Table3 {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> FromTableRef<read_fonts::codegen_test::formats::Table3<'a>> for Table3 {}
 
 impl<'a> FontRead<'a> for Table3 {
